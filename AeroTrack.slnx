@@ -1,0 +1,10 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="AeroTrackClient/AeroTrackClient.vcxproj" />
+  <Project Path="AeroTrackServer/AeroTrackServer.vcxproj" />
+  <Project Path="AeroTrackShared/AeroTrackShared.vcxproj" />
+  <Project Path="AeroTrackTests/AeroTrackTests.vcxproj" />
+</Solution>
