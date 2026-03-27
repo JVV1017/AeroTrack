@@ -19,12 +19,26 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="temp.cpp" />
+    <ClCompile Include="Filetransfer.cpp" />
+    <ClCompile Include="Flightregistry.cpp" />
+    <ClCompile Include="Handoffmanager.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="Server.cpp" />
+    <ClCompile Include="Serverui.cpp" />
+    <ClCompile Include="Statemachine.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AeroTrackShared\AeroTrackShared.vcxproj">
       <Project>{18ca213c-a782-49e9-8e5c-b44696f3f027}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Filetransfer.h" />
+    <ClInclude Include="Flightregistry.h" />
+    <ClInclude Include="Handoffmanager.h" />
+    <ClInclude Include="Server.h" />
+    <ClInclude Include="Serverui.h" />
+    <ClInclude Include="Statemachine.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>

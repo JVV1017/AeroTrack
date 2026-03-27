@@ -19,6 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\AeroTrackServer\Filetransfertests.cpp" />
+    <ClCompile Include="..\AeroTrackServer\Servertests.cpp" />
+    <ClCompile Include="..\AeroTrackServer\Statemachinetests.cpp" />
     <ClCompile Include="temp.cpp" />
   </ItemGroup>
   <ItemGroup>
