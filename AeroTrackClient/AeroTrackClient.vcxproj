@@ -29,7 +29,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{17a37ba8-2748-49a9-8956-e2867a5d896b}</ProjectGuid>
+    <ProjectGuid>{7DD45D5A-CE42-71C4-6B13-D5CDFC4E1C53}</ProjectGuid>
     <RootNamespace>AeroTrackClient</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>

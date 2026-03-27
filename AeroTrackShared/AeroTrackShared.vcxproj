@@ -34,7 +34,7 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{18ca213c-a782-49e9-8e5c-b44696f3f027}</ProjectGuid>
+    <ProjectGuid>{0B41FC63-189D-E4AC-21AB-6A8EEBC2DE2B}</ProjectGuid>
     <RootNamespace>AeroTrackShared</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
