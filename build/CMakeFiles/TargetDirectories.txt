@@ -1,0 +1,5 @@
+/Users/evantomy/Documents/College/Sem 10/Software Safety & Reliability/Project/AeroTrack/build/CMakeFiles/AeroTrackShared.dir
+/Users/evantomy/Documents/College/Sem 10/Software Safety & Reliability/Project/AeroTrack/build/CMakeFiles/AeroTrackServer.dir
+/Users/evantomy/Documents/College/Sem 10/Software Safety & Reliability/Project/AeroTrack/build/CMakeFiles/AeroTrackClient.dir
+/Users/evantomy/Documents/College/Sem 10/Software Safety & Reliability/Project/AeroTrack/build/CMakeFiles/edit_cache.dir
+/Users/evantomy/Documents/College/Sem 10/Software Safety & Reliability/Project/AeroTrack/build/CMakeFiles/rebuild_cache.dir

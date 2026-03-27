@@ -1,0 +1,2 @@
+/usr/bin/ar qc libAeroTrackShared.a CMakeFiles/AeroTrackShared.dir/AeroTrackShared/Logger.cpp.o CMakeFiles/AeroTrackShared.dir/AeroTrackShared/Packet.cpp.o CMakeFiles/AeroTrackShared.dir/AeroTrackShared/PacketTypes.cpp.o CMakeFiles/AeroTrackShared.dir/AeroTrackShared/RUDP.cpp.o
+/usr/bin/ranlib libAeroTrackShared.a

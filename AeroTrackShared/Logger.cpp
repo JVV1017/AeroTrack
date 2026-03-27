@@ -18,18 +18,19 @@
 
 #include <chrono>
 #include <ctime>
-#include <sstream>   // MISRA Deviation 2
-#include <iomanip>   // MISRA Deviation 2
+#include <sstream> // MISRA Deviation 2
+#include <iomanip> // MISRA Deviation 2
 
-namespace AeroTrack {
+namespace AeroTrack
+{
 
-    Logger::Logger()  = default;
+    Logger::Logger() = default;
     Logger::~Logger() { Close(); }
 
     // =========================================================================
     // Init — REQ-LOG-030, REQ-LOG-040
     // =========================================================================
-    bool Logger::Init(const std::string& filename)
+    bool Logger::Init(const std::string &filename)
     {
         m_file.open(filename, std::ios::out | std::ios::app);
         return m_file.is_open();
@@ -62,12 +63,17 @@ namespace AeroTrack {
 
         // Milliseconds component (0–999)
         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            now.time_since_epoch()) % 1000;
+                            now.time_since_epoch()) %
+                        1000;
 
         const std::time_t t = std::chrono::system_clock::to_time_t(now);
 
         std::tm tmBuf{};
-        localtime_s(&tmBuf, &t);  // Thread-safe (MSVC / Windows)
+#ifdef _WIN32
+        localtime_s(&tmBuf, &t); // Thread-safe (MSVC / Windows)
+#else
+        localtime_r(&t, &tmBuf); // Thread-safe (macOS / Linux)
+#endif
 
         std::ostringstream oss;
         oss << std::put_time(&tmBuf, "%Y-%m-%d %H:%M:%S")
@@ -83,12 +89,12 @@ namespace AeroTrack {
     // Appends the entry string and a newline, then flushes to disk.
     // Flushing after every write prevents data loss on unexpected termination.
     // =========================================================================
-    void Logger::WriteEntry(const std::string& entry)
+    void Logger::WriteEntry(const std::string &entry)
     {
         if (m_file.is_open())
         {
             m_file << entry << '\n';
-            m_file.flush();  // REQ-LOG-050
+            m_file.flush(); // REQ-LOG-050
         }
     }
 
@@ -100,9 +106,9 @@ namespace AeroTrack {
     //
     // SIZE is the total wire size: header (27 bytes) + payload bytes.
     // =========================================================================
-    void Logger::LogPacket(const std::string& direction,
-                           const Packet&      packet,
-                           const std::string& status)
+    void Logger::LogPacket(const std::string &direction,
+                           const Packet &packet,
+                           const std::string &status)
     {
         const uint32_t wireSize =
             static_cast<uint32_t>(sizeof(PacketHeader)) + packet.GetPayloadLength();
@@ -111,9 +117,9 @@ namespace AeroTrack {
         oss << CurrentTimestamp()
             << " | " << direction
             << " | " << packet.TypeString()
-            << " | SEQ:"    << std::setw(4) << std::setfill('0') << packet.GetSequenceNumber()
-            << " | FLT:"    << packet.GetFlightId()
-            << " | SIZE:"   << wireSize
+            << " | SEQ:" << std::setw(4) << std::setfill('0') << packet.GetSequenceNumber()
+            << " | FLT:" << packet.GetFlightId()
+            << " | SIZE:" << wireSize
             << " | STATUS:" << status;
 
         WriteEntry(oss.str());
@@ -125,17 +131,17 @@ namespace AeroTrack {
     // Output format:
     //   2026-03-20 08:15:05.001 | STATE_CHANGE | FLT:801 | FROM:CONNECTED | TO:TRACKING | TRIGGER:POSITION_REPORT
     // =========================================================================
-    void Logger::LogStateChange(uint32_t           flightId,
-                                const std::string& fromState,
-                                const std::string& toState,
-                                const std::string& trigger)
+    void Logger::LogStateChange(uint32_t flightId,
+                                const std::string &fromState,
+                                const std::string &toState,
+                                const std::string &trigger)
     {
         std::ostringstream oss;
         oss << CurrentTimestamp()
             << " | STATE_CHANGE"
-            << " | FLT:"     << flightId
-            << " | FROM:"    << fromState
-            << " | TO:"      << toState
+            << " | FLT:" << flightId
+            << " | FROM:" << fromState
+            << " | TO:" << toState
             << " | TRIGGER:" << trigger;
 
         WriteEntry(oss.str());
@@ -144,12 +150,12 @@ namespace AeroTrack {
     // =========================================================================
     // LogInfo / LogError — general diagnostics
     // =========================================================================
-    void Logger::LogInfo(const std::string& message)
+    void Logger::LogInfo(const std::string &message)
     {
         WriteEntry(CurrentTimestamp() + " | INFO | " + message);
     }
 
-    void Logger::LogError(const std::string& message)
+    void Logger::LogError(const std::string &message)
     {
         WriteEntry(CurrentTimestamp() + " | ERROR | " + message);
     }
