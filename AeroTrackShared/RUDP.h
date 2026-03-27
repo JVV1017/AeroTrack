@@ -111,6 +111,15 @@ namespace AeroTrack {
         // `packet` is modified: sequence_number and timestamp are set in-place.
         bool SendReliable(Packet& packet, uint32_t flightId, const Endpoint& dest);
 
+        // ---- Fire-and-forget send --------------------------------------------
+
+        // Send a packet WITHOUT waiting for ACK.
+        // Use for server responses (CONNECT_ACK, TRACKING_ACK, HANDOFF_INSTRUCT)
+        // where blocking the socket would drop packets from other clients.
+        // Assigns sequence number and timestamp, serializes, and sends once.
+        // Returns true if sendto() succeeded.
+        bool SendPacket(Packet& packet, uint32_t flightId, const Endpoint& dest);
+
         // Send a bare ACK packet for a received sequence number.
         // Used internally by Receive(); exposed for callers with custom ACK logic.
         // REQ-COM-030

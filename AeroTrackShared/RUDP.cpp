@@ -300,6 +300,36 @@ namespace AeroTrack {
         return false;
     }
 
+    // =========================================================================
+    // SendPacket — fire-and-forget, no ACK wait
+    //
+    // Used by Server for responses (CONNECT_ACK, TRACKING_ACK, HANDOFF_INSTRUCT)
+    // where blocking the socket on WaitForAck() would cause packets from other
+    // clients to be dropped during the wait window.
+    // The client handles retry at the application level (re-sending CONNECT on
+    // timeout, handoff has its own timer).
+    // =========================================================================
+    bool RUDP::SendPacket(Packet& packet, uint32_t /*flightId*/, const Endpoint& dest)
+    {
+        if (!m_initialized || !dest.IsValid())
+        {
+            return false;
+        }
+
+        packet.SetSequenceNumber(GetNextSequenceNumber());
+        packet.SetTimestamp(Packet::CurrentTimestampMs());
+
+        const std::vector<uint8_t> serialized = packet.Serialize();
+
+        const bool sent = SendRawBytes(serialized, dest);
+
+        if ((m_logger != nullptr) && sent)
+        {
+            m_logger->LogPacket("TX", packet, "OK");
+        }
+
+        return sent;
+    }
 
     // =========================================================================
     // SendAckFor — REQ-COM-030
