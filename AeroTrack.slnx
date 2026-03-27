@@ -3,8 +3,8 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="AeroTrackClient/AeroTrackClient.vcxproj" Id="17a37ba8-2748-49a9-8956-e2867a5d896b" />
-  <Project Path="AeroTrackServer/AeroTrackServer.vcxproj" Id="e36477bb-b8b9-4744-b659-c715bba9b94b" />
-  <Project Path="AeroTrackShared/AeroTrackShared.vcxproj" Id="18ca213c-a782-49e9-8e5c-b44696f3f027" />
+  <Project Path="AeroTrackClient/AeroTrackClient.vcxproj" />
+  <Project Path="AeroTrackServer/AeroTrackServer.vcxproj" />
+  <Project Path="AeroTrackShared/AeroTrackShared.vcxproj" />
   <Project Path="AeroTrackTests/AeroTrackTests.vcxproj" />
 </Solution>
