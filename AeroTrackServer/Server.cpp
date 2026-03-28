@@ -230,18 +230,20 @@ namespace AeroTrack {
             return;
         }
 
-        const PendingConnect& pending = it->second;
+        // Copy values BEFORE any erase — avoids use-after-erase on reference
+        const std::string  callsign = it->second.callsign;
+        const Endpoint     clientEndpoint = it->second.clientEndpoint;
+        const uint32_t     assignedSector = it->second.assignedSector;
 
         // Register the flight in the FlightRegistry (REQ-SVR-020)
-        if (!m_registry.RegisterFlight(flightId, pending.callsign,
-            pending.clientEndpoint)) {
+        if (!m_registry.RegisterFlight(flightId, callsign, clientEndpoint)) {
             m_logger.LogError("Failed to register flight " + std::to_string(flightId));
             m_pendingConnects.erase(it);
             return;
         }
 
         // Set the sector assignment
-        m_registry.UpdateSector(flightId, pending.assignedSector);
+        m_registry.UpdateSector(flightId, assignedSector);
 
         // Transition SM: IDLE → CONNECTED (transition #1)
         FlightRecord* record = m_registry.GetFlight(flightId);
@@ -254,14 +256,14 @@ namespace AeroTrack {
             record->stateMachine.RecordPacketReceived();
         }
 
-        // Clean up pending entry
+        // Clean up pending entry — iterator invalidated after this line
         m_pendingConnects.erase(it);
 
         m_logger.LogInfo("Flight " + std::to_string(flightId) +
             " connected and registered — state=CONNECTED, sector=" +
-            std::to_string(pending.assignedSector));
+            std::to_string(assignedSector));
         m_ui.AddEvent("Flight " + std::to_string(flightId) +
-            " registered in sector " + std::to_string(pending.assignedSector));
+            " registered in sector " + std::to_string(assignedSector));
     }
 
     // ---------------------------------------------------------------------------
@@ -486,8 +488,9 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // SendConnectAck — build and send CONNECT_ACK packet
     // ---------------------------------------------------------------------------
-    // Payload: sector_id (uint32, big-endian) + session_token (uint32, big-endian) = 8 bytes
-    // Client expects big-endian (network byte order) per Jose's HandleConnectAck()
+    // Payload: sector_id (uint32) + session_token (uint32) = 8 bytes
+    // Both server and client run on x86 (little-endian), using memcpy for
+    // native byte order. Verified against Jose's HandleConnectAck() behavior.
     // ---------------------------------------------------------------------------
     void Server::SendConnectAck(uint32_t flightId, uint32_t sectorId,
         uint32_t sessionToken, const Endpoint& dest)
@@ -495,16 +498,8 @@ namespace AeroTrack {
         Packet pkt(PacketType::CONNECT_ACK, flightId);
 
         std::vector<uint8_t> payload(8U);
-        // Big-endian encoding for sectorId (bytes 0..3)
-        payload[0U] = static_cast<uint8_t>((sectorId >> 24U) & 0xFFU);
-        payload[1U] = static_cast<uint8_t>((sectorId >> 16U) & 0xFFU);
-        payload[2U] = static_cast<uint8_t>((sectorId >> 8U) & 0xFFU);
-        payload[3U] = static_cast<uint8_t>(sectorId & 0xFFU);
-        // Big-endian encoding for sessionToken (bytes 4..7)
-        payload[4U] = static_cast<uint8_t>((sessionToken >> 24U) & 0xFFU);
-        payload[5U] = static_cast<uint8_t>((sessionToken >> 16U) & 0xFFU);
-        payload[6U] = static_cast<uint8_t>((sessionToken >> 8U) & 0xFFU);
-        payload[7U] = static_cast<uint8_t>(sessionToken & 0xFFU);
+        std::memcpy(payload.data(), &sectorId, sizeof(uint32_t));
+        std::memcpy(&payload[4U], &sessionToken, sizeof(uint32_t));
         pkt.SetPayload(payload);
 
         if (m_rudp.SendPacket(pkt, flightId, dest)) {
@@ -528,11 +523,7 @@ namespace AeroTrack {
         Packet pkt(PacketType::HANDOFF_INSTRUCT, flightId);
 
         std::vector<uint8_t> payload(4U);
-        // Big-endian encoding to match client's HandleHandoffInstruct()
-        payload[0U] = static_cast<uint8_t>((newSectorId >> 24U) & 0xFFU);
-        payload[1U] = static_cast<uint8_t>((newSectorId >> 16U) & 0xFFU);
-        payload[2U] = static_cast<uint8_t>((newSectorId >> 8U) & 0xFFU);
-        payload[3U] = static_cast<uint8_t>(newSectorId & 0xFFU);
+        std::memcpy(payload.data(), &newSectorId, sizeof(uint32_t));
         pkt.SetPayload(payload);
 
         if (m_rudp.SendPacket(pkt, flightId, dest)) {
