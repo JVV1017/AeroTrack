@@ -37,23 +37,24 @@
 #include <cstring>
 #include <string>
 
-namespace AeroTrack {
+namespace AeroTrack
+{
 
     // =========================================================================
     // File-scope helpers — Winsock ↔ Endpoint conversion
     // Not exposed in the header; internal linkage only.
     // =========================================================================
 
-    static sockaddr_in EndpointToSockAddr(const Endpoint& ep)
+    static sockaddr_in EndpointToSockAddr(const Endpoint &ep)
     {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
-        addr.sin_port   = htons(ep.port);
+        addr.sin_port = htons(ep.port);
         inet_pton(AF_INET, ep.ip.c_str(), &addr.sin_addr);
         return addr;
     }
 
-    static Endpoint SockAddrToEndpoint(const sockaddr_in& addr)
+    static Endpoint SockAddrToEndpoint(const sockaddr_in &addr)
     {
         Endpoint ep;
         ep.port = ntohs(addr.sin_port);
@@ -73,30 +74,28 @@ namespace AeroTrack {
             sock,
             SOL_SOCKET,
             SO_RCVTIMEO,
-            reinterpret_cast<const char*>(&tv),
-            static_cast<int>(sizeof(DWORD))
-        );
+            reinterpret_cast<const char *>(&tv),
+            static_cast<int>(sizeof(DWORD)));
         return (result != SOCKET_ERROR);
     }
-
 
     // =========================================================================
     // Constructor / Destructor
     // =========================================================================
 
     RUDP::RUDP()
-        : m_socketHandle(static_cast<uintptr_t>(INVALID_SOCKET))
-        , m_sequenceNumber(1U)  // Sequence numbers start at 1 (0 = uninitialized)
-        , m_initialized(false)
-        , m_logger(nullptr)
-    {}
+        : m_socketHandle(static_cast<uintptr_t>(INVALID_SOCKET)), m_sequenceNumber(1U) // Sequence numbers start at 1 (0 = uninitialized)
+          ,
+          m_initialized(false), m_logger(nullptr)
+    {
+    }
 
     RUDP::~RUDP()
     {
         Shutdown();
     }
 
-    void RUDP::SetLogger(Logger* logger) noexcept
+    void RUDP::SetLogger(Logger *logger) noexcept
     {
         m_logger = logger;
     }
@@ -105,7 +104,6 @@ namespace AeroTrack {
     {
         return m_initialized;
     }
-
 
     // =========================================================================
     // Init — REQ-COM-010
@@ -126,12 +124,11 @@ namespace AeroTrack {
             return false;
         }
 
-        m_socketHandle   = static_cast<uintptr_t>(sock);
-        m_initialized    = true;
+        m_socketHandle = static_cast<uintptr_t>(sock);
+        m_initialized = true;
         m_sequenceNumber = 1U;
         return true;
     }
-
 
     // =========================================================================
     // Shutdown
@@ -143,10 +140,9 @@ namespace AeroTrack {
             closesocket(static_cast<SOCKET>(m_socketHandle));
             WSACleanup();
             m_socketHandle = static_cast<uintptr_t>(INVALID_SOCKET);
-            m_initialized  = false;
+            m_initialized = false;
         }
     }
-
 
     // =========================================================================
     // Bind — server use only
@@ -159,19 +155,17 @@ namespace AeroTrack {
         }
 
         sockaddr_in bindAddr{};
-        bindAddr.sin_family      = AF_INET;
-        bindAddr.sin_port        = htons(port);
+        bindAddr.sin_family = AF_INET;
+        bindAddr.sin_port = htons(port);
         bindAddr.sin_addr.s_addr = INADDR_ANY;
 
         const int result = bind(
             static_cast<SOCKET>(m_socketHandle),
-            reinterpret_cast<sockaddr*>(&bindAddr),
-            static_cast<int>(sizeof(sockaddr_in))
-        );
+            reinterpret_cast<sockaddr *>(&bindAddr),
+            static_cast<int>(sizeof(sockaddr_in)));
 
         return (result != SOCKET_ERROR);
     }
-
 
     // =========================================================================
     // GetNextSequenceNumber — REQ-COM-020
@@ -181,11 +175,10 @@ namespace AeroTrack {
         return m_sequenceNumber++;
     }
 
-
     // =========================================================================
     // SendRawBytes — internal serialized send
     // =========================================================================
-    bool RUDP::SendRawBytes(const std::vector<uint8_t>& data, const Endpoint& dest)
+    bool RUDP::SendRawBytes(const std::vector<uint8_t> &data, const Endpoint &dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -196,16 +189,14 @@ namespace AeroTrack {
 
         const int sent = sendto(
             static_cast<SOCKET>(m_socketHandle),
-            reinterpret_cast<const char*>(data.data()),
+            reinterpret_cast<const char *>(data.data()),
             static_cast<int>(data.size()),
             0,
-            reinterpret_cast<sockaddr*>(&destAddr),
-            static_cast<int>(sizeof(sockaddr_in))
-        );
+            reinterpret_cast<sockaddr *>(&destAddr),
+            static_cast<int>(sizeof(sockaddr_in)));
 
         return (sent != SOCKET_ERROR);
     }
-
 
     // =========================================================================
     // WaitForAck — internal, REQ-COM-030
@@ -226,35 +217,33 @@ namespace AeroTrack {
         static_cast<void>(SetRecvTimeout(sock, timeoutMs));
 
         // Buffer sized for the largest ACK packet (header only, no payload)
-        uint8_t    recvBuf[256U]{};
+        uint8_t recvBuf[256U]{};
         sockaddr_in senderAddr{};
-        int        addrLen = static_cast<int>(sizeof(sockaddr_in));
+        int addrLen = static_cast<int>(sizeof(sockaddr_in));
 
         const int received = recvfrom(
             sock,
-            reinterpret_cast<char*>(recvBuf),
+            reinterpret_cast<char *>(recvBuf),
             static_cast<int>(sizeof(recvBuf)),
             0,
-            reinterpret_cast<sockaddr*>(&senderAddr),
-            &addrLen
-        );
+            reinterpret_cast<sockaddr *>(&senderAddr),
+            &addrLen);
 
         if (received == SOCKET_ERROR)
         {
-            return false;  // Timeout (WSAETIMEDOUT) or network error
+            return false; // Timeout (WSAETIMEDOUT) or network error
         }
 
         const Packet incoming = Packet::Deserialize(recvBuf, static_cast<uint32_t>(received));
 
-        return ((incoming.GetType()      == PacketType::ACK) &&
+        return ((incoming.GetType() == PacketType::ACK) &&
                 (incoming.GetAckNumber() == expectedSeq));
     }
-
 
     // =========================================================================
     // SendReliable — REQ-COM-020, REQ-COM-030, REQ-COM-040, REQ-COM-050/060
     // =========================================================================
-    bool RUDP::SendReliable(Packet& packet, uint32_t /*flightId*/, const Endpoint& dest)
+    bool RUDP::SendReliable(Packet &packet, uint32_t /*flightId*/, const Endpoint &dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -262,7 +251,7 @@ namespace AeroTrack {
         }
 
         // Assign sequence number and refresh timestamp
-        packet.SetSequenceNumber(GetNextSequenceNumber());  // REQ-COM-020
+        packet.SetSequenceNumber(GetNextSequenceNumber()); // REQ-COM-020
         packet.SetTimestamp(Packet::CurrentTimestampMs());
 
         const std::vector<uint8_t> serialized = packet.Serialize();
@@ -272,7 +261,7 @@ namespace AeroTrack {
             const bool sent = SendRawBytes(serialized, dest);
             if (!sent)
             {
-                return false;  // Hard socket error — abort immediately
+                return false; // Hard socket error — abort immediately
             }
 
             // Log TX or RETRANSMIT event — REQ-COM-050
@@ -285,7 +274,7 @@ namespace AeroTrack {
             // Wait for matching ACK — REQ-COM-030
             if (WaitForAck(packet.GetSequenceNumber(), RUDP_TIMEOUT_MS))
             {
-                return true;  // ACK received within timeout
+                return true; // ACK received within timeout
             }
 
             // If this was the last attempt, fall through to error
@@ -309,7 +298,7 @@ namespace AeroTrack {
     // The client handles retry at the application level (re-sending CONNECT on
     // timeout, handoff has its own timer).
     // =========================================================================
-    bool RUDP::SendPacket(Packet& packet, uint32_t /*flightId*/, const Endpoint& dest)
+    bool RUDP::SendPacket(Packet &packet, uint32_t flightId, const Endpoint &dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -318,23 +307,15 @@ namespace AeroTrack {
 
         packet.SetSequenceNumber(GetNextSequenceNumber());
         packet.SetTimestamp(Packet::CurrentTimestampMs());
-
-        const std::vector<uint8_t> serialized = packet.Serialize();
-
-        const bool sent = SendRawBytes(serialized, dest);
-
-        if ((m_logger != nullptr) && sent)
-        {
-            m_logger->LogPacket("TX", packet, "OK");
-        }
-
-        return sent;
+        packet.SetFlightId(flightId);
+        std::vector<uint8_t> data = packet.Serialize();
+        return SendRawBytes(data, dest);
     }
 
     // =========================================================================
     // SendAckFor — REQ-COM-030
     // =========================================================================
-    bool RUDP::SendAckFor(uint32_t seqNumber, uint32_t flightId, const Endpoint& dest)
+    bool RUDP::SendAckFor(uint32_t seqNumber, uint32_t flightId, const Endpoint &dest)
     {
         Packet ack(PacketType::ACK, flightId);
         ack.SetSequenceNumber(GetNextSequenceNumber());
@@ -345,11 +326,10 @@ namespace AeroTrack {
         return SendRawBytes(serialized, dest);
     }
 
-
     // =========================================================================
     // Receive — REQ-COM-030, REQ-PKT-050, REQ-PKT-060, REQ-LOG-010
     // =========================================================================
-    bool RUDP::Receive(Packet& outPacket, Endpoint& outSender, uint32_t timeoutMs)
+    bool RUDP::Receive(Packet &outPacket, Endpoint &outSender, uint32_t timeoutMs)
     {
         if (!m_initialized)
         {
@@ -361,22 +341,21 @@ namespace AeroTrack {
 
         // Buffer large enough for header + largest payload (file chunk: ~1055 bytes)
         // 4096 provides a safe margin without excessive stack usage.
-        uint8_t    recvBuf[4096U]{};
+        uint8_t recvBuf[4096U]{};
         sockaddr_in senderAddr{};
-        int         addrLen = static_cast<int>(sizeof(sockaddr_in));
+        int addrLen = static_cast<int>(sizeof(sockaddr_in));
 
         const int received = recvfrom(
             sock,
-            reinterpret_cast<char*>(recvBuf),
+            reinterpret_cast<char *>(recvBuf),
             static_cast<int>(sizeof(recvBuf)),
             0,
-            reinterpret_cast<sockaddr*>(&senderAddr),
-            &addrLen
-        );
+            reinterpret_cast<sockaddr *>(&senderAddr),
+            &addrLen);
 
         if (received == SOCKET_ERROR)
         {
-            return false;  // Timeout or network error
+            return false; // Timeout or network error
         }
 
         outPacket = Packet::Deserialize(recvBuf, static_cast<uint32_t>(received));
@@ -402,8 +381,7 @@ namespace AeroTrack {
         if (outPacket.GetType() != PacketType::ACK)
         {
             static_cast<void>(
-                SendAckFor(outPacket.GetSequenceNumber(), outPacket.GetFlightId(), outSender)
-            );
+                SendAckFor(outPacket.GetSequenceNumber(), outPacket.GetFlightId(), outSender));
         }
 
         return true;
