@@ -3,6 +3,10 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
+  <Folder Name="/test_data/">
+    <File Path="x64/Debug/test_data/sector_north.jpg" />
+    <File Path="x64/Debug/test_data/sector_south.jpg" />
+  </Folder>
   <Project Path="AeroTrackClient/AeroTrackClient.vcxproj" />
   <Project Path="AeroTrackServer/AeroTrackServer.vcxproj" />
   <Project Path="AeroTrackShared/AeroTrackShared.vcxproj" />
