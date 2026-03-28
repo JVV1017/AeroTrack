@@ -486,7 +486,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // SendConnectAck — build and send CONNECT_ACK packet
     // ---------------------------------------------------------------------------
-    // Payload: sector_id (uint32) + session_token (uint32) = 8 bytes
+    // Payload: sector_id (uint32, big-endian) + session_token (uint32, big-endian) = 8 bytes
+    // Client expects big-endian (network byte order) per Jose's HandleConnectAck()
     // ---------------------------------------------------------------------------
     void Server::SendConnectAck(uint32_t flightId, uint32_t sectorId,
         uint32_t sessionToken, const Endpoint& dest)
@@ -494,11 +495,19 @@ namespace AeroTrack {
         Packet pkt(PacketType::CONNECT_ACK, flightId);
 
         std::vector<uint8_t> payload(8U);
-        std::memcpy(payload.data(), &sectorId, sizeof(uint32_t));
-        std::memcpy(&payload[4U], &sessionToken, sizeof(uint32_t));
+        // Big-endian encoding for sectorId (bytes 0..3)
+        payload[0U] = static_cast<uint8_t>((sectorId >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((sectorId >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((sectorId >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(sectorId & 0xFFU);
+        // Big-endian encoding for sessionToken (bytes 4..7)
+        payload[4U] = static_cast<uint8_t>((sessionToken >> 24U) & 0xFFU);
+        payload[5U] = static_cast<uint8_t>((sessionToken >> 16U) & 0xFFU);
+        payload[6U] = static_cast<uint8_t>((sessionToken >> 8U) & 0xFFU);
+        payload[7U] = static_cast<uint8_t>(sessionToken & 0xFFU);
         pkt.SetPayload(payload);
 
-        if (m_rudp.SendReliable(pkt, flightId, dest)) {
+        if (m_rudp.SendPacket(pkt, flightId, dest)) {
             m_logger.LogPacket("TX", pkt, "OK");
         }
         else {
@@ -511,7 +520,7 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // SendHandoffInstruct — build and send HANDOFF_INSTRUCT packet
     // ---------------------------------------------------------------------------
-    // Payload: new_sector_id (uint32) = 4 bytes
+    // Payload: new_sector_id (uint32, big-endian) = 4 bytes
     // ---------------------------------------------------------------------------
     void Server::SendHandoffInstruct(uint32_t flightId, uint32_t newSectorId,
         const Endpoint& dest)
@@ -519,10 +528,14 @@ namespace AeroTrack {
         Packet pkt(PacketType::HANDOFF_INSTRUCT, flightId);
 
         std::vector<uint8_t> payload(4U);
-        std::memcpy(payload.data(), &newSectorId, sizeof(uint32_t));
+        // Big-endian encoding to match client's HandleHandoffInstruct()
+        payload[0U] = static_cast<uint8_t>((newSectorId >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((newSectorId >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((newSectorId >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(newSectorId & 0xFFU);
         pkt.SetPayload(payload);
 
-        if (m_rudp.SendReliable(pkt, flightId, dest)) {
+        if (m_rudp.SendPacket(pkt, flightId, dest)) {
             m_logger.LogPacket("TX", pkt, "OK");
         }
         else {
