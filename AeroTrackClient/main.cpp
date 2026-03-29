@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <csignal>
+#include <string>
 
 #include "Client.h"
 
@@ -37,8 +38,12 @@ static void SignalHandler(int sig) noexcept {
 
 // ---------------------------------------------------------------------------
 // main
+// Usage: AeroTrackClient.exe <flightId> <callsign>
+// Example: AeroTrackClient.exe 1001 AC123
+//          AeroTrackClient.exe 2002 UA442
+// Defaults to 1001 / AC123 if no args provided.
 // ---------------------------------------------------------------------------
-int main() {
+int main(int argc, char* argv[]) {
     // Initialize Winsock 2.2
     WSADATA wsaData;
     int wsaResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
@@ -55,17 +60,27 @@ int main() {
         AeroTrack::Client client;
         g_client = &client;
 
-        constexpr uint32_t  FLIGHT_ID = 1001U;
-        const std::string   CALLSIGN = "AC123";
+        // Default identity — overridden by command-line args
+        uint32_t    flightId = 1001U;
+        std::string callsign = "AC123";
 
-        if (!client.Init(FLIGHT_ID, CALLSIGN)) {
+        if (argc >= 3) {
+            flightId = static_cast<uint32_t>(std::atoi(argv[1]));
+            callsign = std::string(argv[2]);
+        }
+        else if (argc >= 2) {
+            flightId = static_cast<uint32_t>(std::atoi(argv[1]));
+        }
+
+        std::fprintf(stdout,
+            "AeroTrackClient: Flight %u (%s) connecting to 127.0.0.1:27015...\n",
+            flightId, callsign.c_str());
+
+        if (!client.Init(flightId, callsign)) {
             std::fprintf(stderr, "AeroTrackClient: Init failed\n");
             WSACleanup();
             return EXIT_FAILURE;
         }
-
-        std::fprintf(stdout,
-            "AeroTrackClient: Connecting to server at 127.0.0.1:27015...\n");
 
         // REQ-CLT-010: 3-step handshake
         if (!client.Connect()) {

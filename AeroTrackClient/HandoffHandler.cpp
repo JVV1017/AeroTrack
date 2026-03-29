@@ -60,7 +60,7 @@ namespace AeroTrack {
 
     void HandoffHandler::SendHandoffAck() noexcept {
         Packet ack(PacketType::HANDOFF_ACK, m_flightId);
-        if (m_rudp.SendReliable(ack, m_flightId, m_serverEndpoint)) {
+        if (m_rudp.SendPacket(ack, m_flightId, m_serverEndpoint)) {
             m_logger.LogPacket("TX", ack);
             m_logger.LogInfo("HandoffHandler: HANDOFF_ACK sent");
         }
