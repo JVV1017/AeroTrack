@@ -36,6 +36,7 @@
 
 #include <cstring>
 #include <string>
+#include <chrono>
 
 namespace AeroTrack
 {
@@ -213,31 +214,49 @@ namespace AeroTrack
     {
         const SOCKET sock = static_cast<SOCKET>(m_socketHandle);
 
-        // Set receive timeout for this call
-        static_cast<void>(SetRecvTimeout(sock, timeoutMs));
+        // Use a deadline so total wait doesn't exceed timeoutMs
+        const auto deadline = std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(timeoutMs);
 
-        // Buffer sized for the largest ACK packet (header only, no payload)
-        uint8_t recvBuf[256U]{};
-        sockaddr_in senderAddr{};
-        int addrLen = static_cast<int>(sizeof(sockaddr_in));
+        while (std::chrono::steady_clock::now() < deadline) {
+            // Calculate remaining time for this recv call
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now()).count();
+            if (remaining <= 0) {
+                break;
+            }
 
-        const int received = recvfrom(
-            sock,
-            reinterpret_cast<char *>(recvBuf),
-            static_cast<int>(sizeof(recvBuf)),
-            0,
-            reinterpret_cast<sockaddr *>(&senderAddr),
-            &addrLen);
+            static_cast<void>(SetRecvTimeout(sock, static_cast<uint32_t>(remaining)));
 
-        if (received == SOCKET_ERROR)
-        {
-            return false; // Timeout (WSAETIMEDOUT) or network error
+            uint8_t recvBuf[256U]{};
+            sockaddr_in senderAddr{};
+            int addrLen = static_cast<int>(sizeof(sockaddr_in));
+
+            const int received = recvfrom(
+                sock,
+                reinterpret_cast<char*>(recvBuf),
+                static_cast<int>(sizeof(recvBuf)),
+                0,
+                reinterpret_cast<sockaddr*>(&senderAddr),
+                &addrLen);
+
+            if (received == SOCKET_ERROR) {
+                return false;  // Timeout or network error
+            }
+
+            const Packet incoming = Packet::Deserialize(
+                recvBuf, static_cast<uint32_t>(received));
+
+            if ((incoming.GetType() == PacketType::ACK) &&
+                (incoming.GetAckNumber() == expectedSeq)) {
+                return true;  // Got our ACK
+            }
+
+            // Not our ACK — loop and try again (packet is discarded)
+            // The sender will retransmit if needed
         }
 
-        const Packet incoming = Packet::Deserialize(recvBuf, static_cast<uint32_t>(received));
-
-        return ((incoming.GetType() == PacketType::ACK) &&
-                (incoming.GetAckNumber() == expectedSeq));
+        return false;  // Deadline expired without matching ACK
     }
 
     // =========================================================================
