@@ -96,25 +96,31 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // BuildStartPacket — FILE_TRANSFER_START
     // ---------------------------------------------------------------------------
-    // Payload layout (8 bytes):
-    //   [0..3]  total_file_size  (uint32_t, little-endian)
-    //   [4..7]  total_chunks     (uint32_t, little-endian)
+    // Payload layout (8 bytes, big-endian / network byte order):
+    //   [0..3]  total_file_size  (uint32_t, big-endian)
+    //   [4..7]  total_chunks     (uint32_t, big-endian)
+    // Client reads with shift operators — server must encode big-endian.
     // ---------------------------------------------------------------------------
     Packet FileTransfer::BuildStartPacket() const
     {
         Packet pkt(PacketType::FILE_TRANSFER_START, m_flightId);
 
-        // Build payload: total_file_size + total_chunks = 8 bytes
         const uint32_t fileSize = static_cast<uint32_t>(m_fileData.size());
-        constexpr uint32_t PAYLOAD_SIZE = 8U;  // 4 + 4 bytes
+        constexpr uint32_t PAYLOAD_SIZE = 8U;
 
         std::vector<uint8_t> payload(PAYLOAD_SIZE);
 
-        // Copy total_file_size (bytes 0..3)
-        std::memcpy(payload.data(), &fileSize, sizeof(uint32_t));
+        // Big-endian encoding for total_file_size (bytes 0..3)
+        payload[0U] = static_cast<uint8_t>((fileSize >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((fileSize >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((fileSize >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(fileSize & 0xFFU);
 
-        // Copy total_chunks (bytes 4..7)
-        std::memcpy(&payload[4U], &m_totalChunks, sizeof(uint32_t));
+        // Big-endian encoding for total_chunks (bytes 4..7)
+        payload[4U] = static_cast<uint8_t>((m_totalChunks >> 24U) & 0xFFU);
+        payload[5U] = static_cast<uint8_t>((m_totalChunks >> 16U) & 0xFFU);
+        payload[6U] = static_cast<uint8_t>((m_totalChunks >> 8U) & 0xFFU);
+        payload[7U] = static_cast<uint8_t>(m_totalChunks & 0xFFU);
 
         pkt.SetPayload(payload);
 
@@ -124,15 +130,14 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // BuildChunkPacket — FILE_TRANSFER_CHUNK
     // ---------------------------------------------------------------------------
-    // Payload layout (4 + up to 1024 bytes):
-    //   [0..3]         chunk_index  (uint32_t, little-endian)
+    // Payload layout (4 + up to 1024 bytes, chunk_index in big-endian):
+    //   [0..3]         chunk_index  (uint32_t, big-endian)
     //   [4..4+N-1]     chunk_data   (N bytes, where N <= FILE_CHUNK_SIZE)
     // ---------------------------------------------------------------------------
     Packet FileTransfer::BuildChunkPacket(uint32_t chunkIndex) const
     {
         // Bounds check
         if (chunkIndex >= m_totalChunks) {
-            // Return error packet — caller should check before calling
             Packet errPkt(PacketType::ERROR, m_flightId);
             return errPkt;
         }
@@ -149,12 +154,15 @@ namespace AeroTrack {
             chunkBytes = dataSize - startByte;
         }
 
-        // Payload = chunk_index (4 bytes) + chunk_data (chunkBytes)
+        // Payload = chunk_index (4 bytes BE) + chunk_data (chunkBytes)
         const uint32_t payloadSize = 4U + chunkBytes;
         std::vector<uint8_t> payload(payloadSize);
 
-        // Copy chunk_index (bytes 0..3)
-        std::memcpy(payload.data(), &chunkIndex, sizeof(uint32_t));
+        // Big-endian encoding for chunk_index (bytes 0..3)
+        payload[0U] = static_cast<uint8_t>((chunkIndex >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((chunkIndex >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((chunkIndex >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(chunkIndex & 0xFFU);
 
         // Copy chunk_data (bytes 4..4+chunkBytes-1)
         // Using indexed copy instead of pointer arithmetic for MISRA

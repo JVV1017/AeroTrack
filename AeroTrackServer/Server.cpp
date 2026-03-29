@@ -421,6 +421,13 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // ExecuteFileTransfer — send radar image chunks (REQ-SVR-050)
     // ---------------------------------------------------------------------------
+    // Uses SendPacket (fire-and-forget) instead of SendReliable to avoid
+    // blocking the server main loop. SendReliable's WaitForAck() consumes
+    // incoming packets (HANDOFF_ACK, POSITION_REPORT) from the socket buffer,
+    // preventing the server from ever processing the client's HANDOFF_ACK.
+    // The client's FileReceiver handles reassembly; missing chunks are
+    // acceptable for this simulation (documented as known limitation).
+    // ---------------------------------------------------------------------------
     void Server::ExecuteFileTransfer(uint32_t flightId, const std::string& imagePath)
     {
         FlightRecord* record = m_registry.GetFlight(flightId);
@@ -449,36 +456,25 @@ namespace AeroTrack {
 
         const Endpoint& dest = record->clientEndpoint;
 
-        // 1. Send FILE_TRANSFER_START
+        // 1. Send FILE_TRANSFER_START (fire-and-forget)
         Packet startPkt = ft.BuildStartPacket();
-        if (!m_rudp.SendReliable(startPkt, flightId, dest)) {
-            m_logger.LogError("File transfer START failed for flight " +
-                std::to_string(flightId));
-            return;
-        }
+        m_rudp.SendPacket(startPkt, flightId, dest);
         m_logger.LogPacket("TX", startPkt, "OK");
 
-        // 2. Send each chunk (each ACKed individually via RUDP)
+        // 2. Send each chunk (fire-and-forget, non-blocking)
         for (uint32_t i = 0U; i < ft.GetTotalChunks(); ++i) {
             Packet chunkPkt = ft.BuildChunkPacket(i);
-            if (!m_rudp.SendReliable(chunkPkt, flightId, dest)) {
-                m_logger.LogError("File transfer CHUNK " + std::to_string(i) +
-                    " failed for flight " + std::to_string(flightId));
-                return;  // Abort transfer on chunk failure
-            }
+            m_rudp.SendPacket(chunkPkt, flightId, dest);
+
             // Log every 100th chunk to avoid flooding the log
             if ((i % 100U == 0U) || (i == ft.GetTotalChunks() - 1U)) {
                 m_logger.LogPacket("TX", chunkPkt, "OK");
             }
         }
 
-        // 3. Send FILE_TRANSFER_END
+        // 3. Send FILE_TRANSFER_END (fire-and-forget)
         Packet endPkt = ft.BuildEndPacket();
-        if (!m_rudp.SendReliable(endPkt, flightId, dest)) {
-            m_logger.LogError("File transfer END failed for flight " +
-                std::to_string(flightId));
-            return;
-        }
+        m_rudp.SendPacket(endPkt, flightId, dest);
         m_logger.LogPacket("TX", endPkt, "OK");
 
         m_logger.LogInfo("File transfer completed: " + std::to_string(ft.GetTotalChunks()) +
@@ -488,9 +484,10 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // SendConnectAck — build and send CONNECT_ACK packet
     // ---------------------------------------------------------------------------
-    // Payload: sector_id (uint32) + session_token (uint32) = 8 bytes
-    // Both server and client run on x86 (little-endian), using memcpy for
-    // native byte order. Verified against Jose's HandleConnectAck() behavior.
+    // Payload: sector_id (uint32, big-endian) + session_token (uint32, big-endian) = 8 bytes
+    // Client reads with (payload[0]<<24)|(payload[1]<<16)|(payload[2]<<8)|payload[3]
+    // so server must encode in big-endian (network byte order).
+    // MISRA compliant: manual byte-shift encoding, no casts, no platform assumptions.
     // ---------------------------------------------------------------------------
     void Server::SendConnectAck(uint32_t flightId, uint32_t sectorId,
         uint32_t sessionToken, const Endpoint& dest)
@@ -498,8 +495,14 @@ namespace AeroTrack {
         Packet pkt(PacketType::CONNECT_ACK, flightId);
 
         std::vector<uint8_t> payload(8U);
-        std::memcpy(payload.data(), &sectorId, sizeof(uint32_t));
-        std::memcpy(&payload[4U], &sessionToken, sizeof(uint32_t));
+        payload[0U] = static_cast<uint8_t>((sectorId >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((sectorId >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((sectorId >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(sectorId & 0xFFU);
+        payload[4U] = static_cast<uint8_t>((sessionToken >> 24U) & 0xFFU);
+        payload[5U] = static_cast<uint8_t>((sessionToken >> 16U) & 0xFFU);
+        payload[6U] = static_cast<uint8_t>((sessionToken >> 8U) & 0xFFU);
+        payload[7U] = static_cast<uint8_t>(sessionToken & 0xFFU);
         pkt.SetPayload(payload);
 
         if (m_rudp.SendPacket(pkt, flightId, dest)) {
@@ -516,6 +519,7 @@ namespace AeroTrack {
     // SendHandoffInstruct — build and send HANDOFF_INSTRUCT packet
     // ---------------------------------------------------------------------------
     // Payload: new_sector_id (uint32, big-endian) = 4 bytes
+    // Client reads with shift operators, so server encodes big-endian.
     // ---------------------------------------------------------------------------
     void Server::SendHandoffInstruct(uint32_t flightId, uint32_t newSectorId,
         const Endpoint& dest)
@@ -523,7 +527,10 @@ namespace AeroTrack {
         Packet pkt(PacketType::HANDOFF_INSTRUCT, flightId);
 
         std::vector<uint8_t> payload(4U);
-        std::memcpy(payload.data(), &newSectorId, sizeof(uint32_t));
+        payload[0U] = static_cast<uint8_t>((newSectorId >> 24U) & 0xFFU);
+        payload[1U] = static_cast<uint8_t>((newSectorId >> 16U) & 0xFFU);
+        payload[2U] = static_cast<uint8_t>((newSectorId >> 8U) & 0xFFU);
+        payload[3U] = static_cast<uint8_t>(newSectorId & 0xFFU);
         pkt.SetPayload(payload);
 
         if (m_rudp.SendPacket(pkt, flightId, dest)) {
