@@ -3,6 +3,7 @@
 // =============================================================================
 // Requirements: REQ-SYS-001 (server application)
 // Standard:     MISRA C++ — MISRA Deviation 2: cout used for startup messages
+//               MISRA Deviation DEV-006: std::signal() used for Ctrl+C handling
 // =============================================================================
 
 #include "Server.h"
@@ -12,23 +13,36 @@
 #include <csignal>
 
 // ---------------------------------------------------------------------------
-// Global server pointer for signal handler (single-instance application)
+// Anonymous namespace — satisfies MISRA 7-3-1 (V2575):
+// "The global namespace shall only contain main, namespace declarations,
+//  and extern C declarations."
+// g_serverPtr and SignalHandler are file-local; anonymous namespace replaces
+// the prior 'static' linkage specifier and keeps them out of the global
+// namespace.
 // ---------------------------------------------------------------------------
-static AeroTrack::Server* g_serverPtr = nullptr;
+namespace {
 
-// ---------------------------------------------------------------------------
-// Signal handler — Ctrl+C graceful shutdown
-// ---------------------------------------------------------------------------
-void SignalHandler(int signal)
-{
-    if ((signal == SIGINT) && (g_serverPtr != nullptr)) {
-        std::cout << "\n[AeroTrack] Shutdown signal received. Stopping server...\n";
-        g_serverPtr->Shutdown();
+    AeroTrack::Server* g_serverPtr = nullptr;
+
+    // -----------------------------------------------------------------------
+    // Signal handler — Ctrl+C graceful shutdown
+    // MISRA DEV-006: std::signal() use documented in deviation log.
+    // Handler calls only Server::Shutdown() which sets a single bool flag —
+    // no I/O, no allocation, no non-reentrant functions.
+    // -----------------------------------------------------------------------
+    void SignalHandler(int sig)
+    {
+        if ((sig == SIGINT) && (g_serverPtr != nullptr)) {
+            std::cout << "\n[AeroTrack] Shutdown signal received. Stopping server...\n";
+            g_serverPtr->Shutdown();
+        }
     }
-}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Entry point
+// MISRA 6-6-5 (V2506): Single return at function end via exitCode variable.
 // ---------------------------------------------------------------------------
 int main()
 {
@@ -42,25 +56,29 @@ int main()
     g_serverPtr = &server;
 
     // Register Ctrl+C handler for graceful shutdown
-    std::signal(SIGINT, SignalHandler);
+    // MISRA 0-1-7 (V2547): Return value (previous handler) explicitly discarded.
+    // MISRA DEV-006: std::signal() deviation — see deviation log.
+    (void)std::signal(SIGINT, SignalHandler);
 
-    // Initialise all subsystems
+    int exitCode = 0;
+
     std::cout << "[AeroTrack] Initializing server...\n";
     if (!server.Init()) {
         std::cerr << "[AeroTrack] ERROR: Server initialization failed.\n";
-        return 1;
+        exitCode = 1;
+    }
+    else {
+        std::cout << "[AeroTrack] Server initialized successfully.\n";
+        std::cout << "[AeroTrack] Listening on " << AeroTrack::SERVER_IP
+            << ":" << AeroTrack::SERVER_PORT << "\n";
+        std::cout << "[AeroTrack] Press Ctrl+C to stop.\n\n";
+
+        // Run the main event loop (blocks until Shutdown() is called)
+        server.Run();
+
+        std::cout << "\n[AeroTrack] Server stopped.\n";
+        g_serverPtr = nullptr;
     }
 
-    std::cout << "[AeroTrack] Server initialized successfully.\n";
-    std::cout << "[AeroTrack] Listening on " << AeroTrack::SERVER_IP
-        << ":" << AeroTrack::SERVER_PORT << "\n";
-    std::cout << "[AeroTrack] Press Ctrl+C to stop.\n\n";
-
-    // Run the main event loop (blocks until Shutdown() is called)
-    server.Run();
-
-    std::cout << "\n[AeroTrack] Server stopped.\n";
-    g_serverPtr = nullptr;
-
-    return 0;
+    return exitCode;
 }

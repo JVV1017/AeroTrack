@@ -24,8 +24,7 @@ namespace AeroTrack {
         , m_pendingConnects()
         , m_running(false)
         , m_defaultSectorId(1U)   // New connections start in sector 1
-    {
-    }
+    {}
 
     Server::~Server()
     {
@@ -34,6 +33,8 @@ namespace AeroTrack {
 
     // ---------------------------------------------------------------------------
     // Init — set up all subsystems
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     bool Server::Init()
     {
@@ -164,6 +165,7 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // Client sends CONNECT with payload: flight_id (uint32) + callsign (string)
     // Server sends CONNECT_ACK with payload: sector_id (uint32) + session_token (uint32)
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     void Server::HandleConnect(const Packet& packet, const Endpoint& sender)
     {
@@ -174,7 +176,9 @@ namespace AeroTrack {
         // For simplicity: entire payload is the callsign string
         std::string callsign;
         if (payload.size() > 0U) {
-            callsign.assign(payload.begin(), payload.end());
+            // MISRA 0-1-7 (V2547): std::string constructor form used in place of
+            // assign() to avoid discarding a return value reference.
+            callsign = std::string(payload.begin(), payload.end());
         }
         else {
             callsign = "UNKNOWN-" + std::to_string(flightId);
@@ -218,6 +222,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // REQ-SVR-010: HandleConnectConfirm — Step 3 of 3-step handshake
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
+    // ---------------------------------------------------------------------------
     void Server::HandleConnectConfirm(const Packet& packet, const Endpoint& sender)
     {
         (void)sender;  // Endpoint already stored in PendingConnect from step 1
@@ -238,12 +244,17 @@ namespace AeroTrack {
         // Register the flight in the FlightRegistry (REQ-SVR-020)
         if (!m_registry.RegisterFlight(flightId, callsign, clientEndpoint)) {
             m_logger.LogError("Failed to register flight " + std::to_string(flightId));
-            m_pendingConnects.erase(it);
+            // MISRA 0-1-7 (V2547): erase returns iterator; explicitly discarded.
+            (void)m_pendingConnects.erase(it);
             return;
         }
 
         // Set the sector assignment
-        m_registry.UpdateSector(flightId, assignedSector);
+        // MISRA 0-1-7 (V2547): UpdateSector returns bool; failure logged.
+        if (!m_registry.UpdateSector(flightId, assignedSector)) {
+            m_logger.LogError("UpdateSector failed for flight " +
+                std::to_string(flightId));
+        }
 
         // Transition SM: IDLE → CONNECTED (transition #1)
         FlightRecord* record = m_registry.GetFlight(flightId);
@@ -257,7 +268,8 @@ namespace AeroTrack {
         }
 
         // Clean up pending entry — iterator invalidated after this line
-        m_pendingConnects.erase(it);
+        // MISRA 0-1-7 (V2547): erase returns iterator; explicitly discarded.
+        (void)m_pendingConnects.erase(it);
 
         m_logger.LogInfo("Flight " + std::to_string(flightId) +
             " connected and registered — state=CONNECTED, sector=" +
@@ -268,6 +280,8 @@ namespace AeroTrack {
 
     // ---------------------------------------------------------------------------
     // HandlePositionReport — REQ-SVR-020 + REQ-SVR-040
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     void Server::HandlePositionReport(const Packet& packet, const Endpoint& sender)
     {
@@ -285,8 +299,14 @@ namespace AeroTrack {
         // Deserialize PositionPayload from packet payload
         if (payload.size() >= sizeof(PositionPayload)) {
             PositionPayload pos;
-            std::memcpy(&pos, payload.data(), sizeof(PositionPayload));
-            m_registry.UpdatePosition(flightId, pos);
+            // MISRA 0-1-7 (V2547): memcpy returns void* to dest; explicitly discarded.
+            (void)std::memcpy(&pos, payload.data(), sizeof(PositionPayload));
+
+            // MISRA 0-1-7 (V2547): UpdatePosition returns bool; failure logged.
+            if (!m_registry.UpdatePosition(flightId, pos)) {
+                m_logger.LogError("UpdatePosition failed for flight " +
+                    std::to_string(flightId));
+            }
         }
 
         // If in CONNECTED state, transition to TRACKING on first position report (#2)
@@ -328,6 +348,8 @@ namespace AeroTrack {
 
     // ---------------------------------------------------------------------------
     // HandleHandoffAck — REQ-SVR-040 (handoff completion)
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     void Server::HandleHandoffAck(const Packet& packet, const Endpoint& sender)
     {
@@ -378,7 +400,11 @@ namespace AeroTrack {
         m_logger.LogInfo("DISCONNECT received from flight " + std::to_string(flightId));
         m_ui.AddEvent("DISCONNECT: FLT:" + std::to_string(flightId));
 
-        m_registry.RemoveFlight(flightId);
+        // MISRA 0-1-7 (V2547): RemoveFlight returns bool; failure logged.
+        if (!m_registry.RemoveFlight(flightId)) {
+            m_logger.LogError("RemoveFlight: flight " + std::to_string(flightId) +
+                " was not registered at time of DISCONNECT");
+        }
     }
 
     // ---------------------------------------------------------------------------
@@ -427,6 +453,7 @@ namespace AeroTrack {
     // preventing the server from ever processing the client's HANDOFF_ACK.
     // The client's FileReceiver handles reassembly; missing chunks are
     // acceptable for this simulation (documented as known limitation).
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     void Server::ExecuteFileTransfer(uint32_t flightId, const std::string& imagePath)
     {
@@ -457,14 +484,17 @@ namespace AeroTrack {
         const Endpoint& dest = record->clientEndpoint;
 
         // 1. Send FILE_TRANSFER_START (fire-and-forget)
+        // MISRA 0-1-7 (V2547): SendPacket returns bool; discarded intentionally.
+        // Fire-and-forget is by design — see function header comment.
         Packet startPkt = ft.BuildStartPacket();
-        m_rudp.SendPacket(startPkt, flightId, dest);
+        (void)m_rudp.SendPacket(startPkt, flightId, dest);
         m_logger.LogPacket("TX", startPkt, "OK");
 
         // 2. Send each chunk (fire-and-forget, non-blocking)
         for (uint32_t i = 0U; i < ft.GetTotalChunks(); ++i) {
             Packet chunkPkt = ft.BuildChunkPacket(i);
-            m_rudp.SendPacket(chunkPkt, flightId, dest);
+            // MISRA 0-1-7 (V2547): Intentional fire-and-forget.
+            (void)m_rudp.SendPacket(chunkPkt, flightId, dest);
 
             // Log every 100th chunk to avoid flooding the log
             if ((i % 100U == 0U) || (i == ft.GetTotalChunks() - 1U)) {
@@ -474,7 +504,8 @@ namespace AeroTrack {
 
         // 3. Send FILE_TRANSFER_END (fire-and-forget)
         Packet endPkt = ft.BuildEndPacket();
-        m_rudp.SendPacket(endPkt, flightId, dest);
+        // MISRA 0-1-7 (V2547): Intentional fire-and-forget.
+        (void)m_rudp.SendPacket(endPkt, flightId, dest);
         m_logger.LogPacket("TX", endPkt, "OK");
 
         m_logger.LogInfo("File transfer completed: " + std::to_string(ft.GetTotalChunks()) +
@@ -546,6 +577,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // LogTransition — log a StateMachine transition result
     // ---------------------------------------------------------------------------
+    // MISRA 6-4-2 fix (V2516): Terminal else{} added to if-else if chain.
+    // ---------------------------------------------------------------------------
     void Server::LogTransition(const TransitionResult& tr, uint32_t flightId)
     {
         if (tr.success) {
@@ -562,6 +595,11 @@ namespace AeroTrack {
                 std::string(tr.rejectionReason) +
                 " (from=" + FlightStateToString(tr.previousState) +
                 ", trigger=" + tr.trigger + ")");
+        }
+        else {
+            // Transition failed with no rejection reason — nothing to log.
+            // This path is structurally reachable (e.g., MakeNoAction result);
+            // explicit else satisfies MISRA 6-4-2 defensive completeness.
         }
     }
 

@@ -13,20 +13,24 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // FlightStateToString — used by caller for Logger::LogStateChange
     // ---------------------------------------------------------------------------
+    // MISRA 6-4-5 (V2520): Each case now terminates with break; single return
+    // at function end satisfies 6-6-5 (V2506).
+    // ---------------------------------------------------------------------------
     const char* FlightStateToString(FlightState state)
     {
-        // MISRA: switch covers all enumerators, default provided for defensive coding
+        const char* result;
         switch (state) {
-        case FlightState::IDLE:              return "IDLE";
-        case FlightState::CONNECTED:         return "CONNECTED";
-        case FlightState::TRACKING:          return "TRACKING";
-        case FlightState::HANDOFF_INITIATED: return "HANDOFF_INITIATED";
-        case FlightState::HANDOFF_PENDING:   return "HANDOFF_PENDING";
-        case FlightState::HANDOFF_COMPLETE:  return "HANDOFF_COMPLETE";
-        case FlightState::HANDOFF_FAILED:    return "HANDOFF_FAILED";
-        case FlightState::LOST_CONTACT:      return "LOST_CONTACT";
-        default:                             return "UNKNOWN";
+        case FlightState::IDLE:              result = "IDLE";               break;
+        case FlightState::CONNECTED:         result = "CONNECTED";          break;
+        case FlightState::TRACKING:          result = "TRACKING";           break;
+        case FlightState::HANDOFF_INITIATED: result = "HANDOFF_INITIATED";  break;
+        case FlightState::HANDOFF_PENDING:   result = "HANDOFF_PENDING";    break;
+        case FlightState::HANDOFF_COMPLETE:  result = "HANDOFF_COMPLETE";   break;
+        case FlightState::HANDOFF_FAILED:    result = "HANDOFF_FAILED";     break;
+        case FlightState::LOST_CONTACT:      result = "LOST_CONTACT";       break;
+        default:                             result = "UNKNOWN";             break;
         }
+        return result;
     }
 
     // ---------------------------------------------------------------------------
@@ -36,8 +40,7 @@ namespace AeroTrack {
         : m_flightId(flightId)
         , m_currentState(FlightState::IDLE)
         , m_lastPacketTime(std::chrono::steady_clock::now())
-    {
-    }
+    {}
 
     // ---------------------------------------------------------------------------
     // REQ-STM-020: Transition table — 10 valid transitions
@@ -55,38 +58,52 @@ namespace AeroTrack {
     //  9  | TRACKING          | LOST_CONTACT      | Heartbeat timeout
     // 10  | LOST_CONTACT      | TRACKING          | Aircraft resumes communication
     // ---------------------------------------------------------------------------
+    // MISRA 6-4-5 (V2520): Each case now terminates with break; single return
+    // at function end satisfies 6-6-5 (V2506).
+    // ---------------------------------------------------------------------------
     bool StateMachine::IsValidTransition(FlightState from, FlightState to) const
     {
+        bool valid;
         switch (from) {
         case FlightState::IDLE:
-            return (to == FlightState::CONNECTED);                      // #1
+            valid = (to == FlightState::CONNECTED);                          // #1
+            break;
 
         case FlightState::CONNECTED:
-            return (to == FlightState::TRACKING);                       // #2
+            valid = (to == FlightState::TRACKING);                           // #2
+            break;
 
         case FlightState::TRACKING:
-            return (to == FlightState::HANDOFF_INITIATED)               // #3
-                || (to == FlightState::LOST_CONTACT);                   // #9
+            valid = (to == FlightState::HANDOFF_INITIATED)                   // #3
+                || (to == FlightState::LOST_CONTACT);                       // #9
+            break;
 
         case FlightState::HANDOFF_INITIATED:
-            return (to == FlightState::HANDOFF_PENDING);                // #4
+            valid = (to == FlightState::HANDOFF_PENDING);                    // #4
+            break;
 
         case FlightState::HANDOFF_PENDING:
-            return (to == FlightState::HANDOFF_COMPLETE)                // #5
-                || (to == FlightState::HANDOFF_FAILED);                 // #6
+            valid = (to == FlightState::HANDOFF_COMPLETE)                    // #5
+                || (to == FlightState::HANDOFF_FAILED);                     // #6
+            break;
 
         case FlightState::HANDOFF_COMPLETE:
-            return (to == FlightState::TRACKING);                       // #7
+            valid = (to == FlightState::TRACKING);                           // #7
+            break;
 
         case FlightState::HANDOFF_FAILED:
-            return (to == FlightState::TRACKING);                       // #8
+            valid = (to == FlightState::TRACKING);                           // #8
+            break;
 
         case FlightState::LOST_CONTACT:
-            return (to == FlightState::TRACKING);                       // #10
+            valid = (to == FlightState::TRACKING);                           // #10
+            break;
 
         default:
-            return false;   // Defensive: unknown state rejects all transitions
+            valid = false;   // Defensive: unknown state rejects all transitions
+            break;
         }
+        return valid;
     }
 
     // ---------------------------------------------------------------------------
