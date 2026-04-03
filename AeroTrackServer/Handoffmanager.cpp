@@ -16,8 +16,7 @@ namespace AeroTrack {
     HandoffManager::HandoffManager()
         : m_sectors()
         , m_pendingHandoffs()
-    {
-    }
+    {}
 
     // ---------------------------------------------------------------------------
     // Sector configuration
@@ -37,6 +36,7 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // Sectors use latitude bands: latMin (inclusive) to latMax (exclusive).
     // Returns 0 if position is out of bounds for all defined sectors.
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     uint32_t HandoffManager::GetSectorForPosition(double latitude) const
     {
@@ -52,6 +52,7 @@ namespace AeroTrack {
     // REQ-SVR-040: Check if position update triggers a handoff
     // ---------------------------------------------------------------------------
     // Flow: detect boundary → TRACKING → HANDOFF_INITIATED (transition #3)
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     HandoffAction HandoffManager::CheckForHandoff(FlightRegistry& registry,
         uint32_t flightId)
@@ -95,6 +96,7 @@ namespace AeroTrack {
         }
 
         // Transition #3: TRACKING → HANDOFF_INITIATED
+        // MISRA DEV-005 (V2578): String literal passed to const char* parameter.
         TransitionResult tr = record->stateMachine.Transition(
             FlightState::HANDOFF_INITIATED,
             "Sector boundary crossed (REQ-SVR-040)"
@@ -119,7 +121,23 @@ namespace AeroTrack {
         pending.radarImagePath = radarPath;
         pending.initiatedTime = std::chrono::steady_clock::now();
         pending.instructSent = false;
-        m_pendingHandoffs.emplace(flightId, pending);
+
+        // MISRA 0-1-7 (V2547): std::map::emplace returns pair<iterator,bool>.
+        // The bool indicates whether insertion occurred. The earlier find() guard
+        // ensures we only reach this point when the key is absent, making a false
+        // return structurally impossible. Captured and asserted for MISRA compliance.
+        const auto emplaceResult = m_pendingHandoffs.emplace(flightId, pending);
+        if (!emplaceResult.second) {
+            // Defensive: duplicate key — should not reach here given find() guard above.
+            // Return no-action to leave state machine unchanged.
+            HandoffAction action{};
+            action.type = HandoffActionType::NONE;
+            action.flightId = flightId;
+            action.fromSectorId = currentSector;
+            action.toSectorId = newSector;
+            action.transitionResult = tr;
+            return action;
+        }
 
         // Return action: Server should build and send HANDOFF_INSTRUCT
         HandoffAction action{};
@@ -136,6 +154,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // Confirm HANDOFF_INSTRUCT sent → HANDOFF_INITIATED → HANDOFF_PENDING (#4)
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
+    // ---------------------------------------------------------------------------
     HandoffAction HandoffManager::ConfirmInstructSent(FlightRegistry& registry,
         uint32_t flightId)
     {
@@ -150,6 +170,7 @@ namespace AeroTrack {
         }
 
         // Transition #4: HANDOFF_INITIATED → HANDOFF_PENDING
+        // MISRA DEV-005 (V2578): String literal passed to const char* parameter.
         TransitionResult tr = record->stateMachine.Transition(
             FlightState::HANDOFF_PENDING,
             "HANDOFF_INSTRUCT sent, timeout timer started"
@@ -184,6 +205,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // Process HANDOFF_ACK → HANDOFF_COMPLETE (#5) → TRACKING (#7, auto)
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
+    // ---------------------------------------------------------------------------
     HandoffAction HandoffManager::ProcessHandoffAck(FlightRegistry& registry,
         uint32_t flightId)
     {
@@ -202,6 +225,7 @@ namespace AeroTrack {
         const uint32_t newSectorId = it->second.toSectorId;
 
         // Transition #5: HANDOFF_PENDING → HANDOFF_COMPLETE
+        // MISRA DEV-005 (V2578): String literal passed to const char* parameter.
         TransitionResult tr5 = record->stateMachine.Transition(
             FlightState::HANDOFF_COMPLETE,
             "Aircraft HANDOFF_ACK received"
@@ -218,6 +242,7 @@ namespace AeroTrack {
         }
 
         // Transition #7: HANDOFF_COMPLETE → TRACKING (auto-transition, new sector)
+        // MISRA DEV-005 (V2578): String literal passed to const char* parameter.
         TransitionResult tr7 = record->stateMachine.Transition(
             FlightState::TRACKING,
             "Handoff complete, now tracking in new sector"
@@ -225,10 +250,15 @@ namespace AeroTrack {
         // tr7 should always succeed from HANDOFF_COMPLETE
 
         // Update the flight's sector assignment to the new sector
-        registry.UpdateSector(flightId, newSectorId);
+        // MISRA 0-1-7 (V2547): UpdateSector returns bool; failure is defensive log.
+        if (!registry.UpdateSector(flightId, newSectorId)) {
+            // Non-fatal: sector update failed — flight continues in old sector value.
+            // This should not happen if flightId is valid (verified above via GetFlight).
+        }
 
         // Remove from pending map — iterator invalidated after this line
-        m_pendingHandoffs.erase(it);
+        // MISRA 0-1-7 (V2547): erase(iterator) returns iterator; explicitly discarded.
+        (void)m_pendingHandoffs.erase(it);
 
         // Reset contact timer — we just heard from the aircraft
         record->stateMachine.RecordPacketReceived();
@@ -277,6 +307,7 @@ namespace AeroTrack {
             }
 
             // Transition #6: HANDOFF_PENDING → HANDOFF_FAILED
+            // MISRA DEV-005 (V2578): String literals passed to const char* parameters.
             TransitionResult tr6 = record->stateMachine.Transition(
                 FlightState::HANDOFF_FAILED,
                 "Handoff timeout — no HANDOFF_ACK within HANDOFF_TIMEOUT_MS"
@@ -303,7 +334,8 @@ namespace AeroTrack {
 
         // Clean up expired entries
         for (const uint32_t id : toRemove) {
-            m_pendingHandoffs.erase(id);
+            // MISRA 0-1-7 (V2547): erase(key) returns size_type; explicitly discarded.
+            (void)m_pendingHandoffs.erase(id);
         }
 
         return timedOut;

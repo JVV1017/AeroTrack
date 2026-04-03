@@ -27,8 +27,11 @@ namespace AeroTrack {
         , sessionToken(0U)         // Set by FlightRegistry during registration
         , connectedTime(std::chrono::steady_clock::now())
     {
-        // Zero the position struct defensively
-        std::memset(&lastPosition, 0, sizeof(PositionPayload));
+        // Zero the position struct defensively.
+        // MISRA 0-1-7 (V2547): memset returns void* to dest; explicitly discarded.
+        // The return value is the same as the input pointer and carries no
+        // error information — discard is both correct and conventional.
+        (void)std::memset(&lastPosition, 0, sizeof(PositionPayload));
     }
 
     // ---------------------------------------------------------------------------
@@ -37,11 +40,12 @@ namespace AeroTrack {
     FlightRegistry::FlightRegistry()
         : m_flights()
         , m_nextSessionToken(1000U)   // Session tokens start at 1000
-    {
-    }
+    {}
 
     // ---------------------------------------------------------------------------
     // RegisterFlight — called after 3-step handshake completion
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     bool FlightRegistry::RegisterFlight(uint32_t flightId,
         const std::string& callsign,
@@ -57,15 +61,25 @@ namespace AeroTrack {
         record.sessionToken = m_nextSessionToken;
         m_nextSessionToken += 1U;
 
-        // Insert into the registry
-        // MISRA: using emplace to construct in-place, avoids unnecessary copy
-        m_flights.emplace(flightId, record);
+        // Insert into the registry.
+        // MISRA 0-1-7 (V2547): std::map::emplace returns pair<iterator,bool>.
+        // The bool indicates whether insertion occurred. The earlier find() guard
+        // ensures this point is only reached when the key is absent, making a
+        // false return structurally impossible. Result is captured and checked
+        // defensively for MISRA compliance.
+        const auto emplaceResult = m_flights.emplace(flightId, record);
+        if (!emplaceResult.second) {
+            // Defensive: duplicate key — cannot happen given find() guard above.
+            return false;
+        }
 
         return true;
     }
 
     // ---------------------------------------------------------------------------
     // RemoveFlight — called on DISCONNECT or stale cleanup
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     bool FlightRegistry::RemoveFlight(uint32_t flightId)
     {
@@ -74,12 +88,16 @@ namespace AeroTrack {
             return false;  // Flight not found
         }
 
-        m_flights.erase(it);
+        // MISRA 0-1-7 (V2547): erase(iterator) returns iterator to next element;
+        // explicitly discarded — the updated iterator is not needed here.
+        (void)m_flights.erase(it);
         return true;
     }
 
     // ---------------------------------------------------------------------------
     // GetFlight — non-owning lookup
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only (both overloads).
     // ---------------------------------------------------------------------------
     FlightRecord* FlightRegistry::GetFlight(uint32_t flightId)
     {
@@ -102,6 +120,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // REQ-SVR-020: Update last known position
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
+    // ---------------------------------------------------------------------------
     bool FlightRegistry::UpdatePosition(uint32_t flightId,
         const PositionPayload& position)
     {
@@ -121,6 +141,8 @@ namespace AeroTrack {
 
     // ---------------------------------------------------------------------------
     // REQ-SVR-020: Update sector assignment
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     bool FlightRegistry::UpdateSector(uint32_t flightId, uint32_t newSectorId)
     {

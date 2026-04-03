@@ -25,13 +25,13 @@ namespace AeroTrack {
         , m_totalChunks(0U)
         , m_status(FileTransferStatus::NOT_STARTED)
         , m_filePath()
-    {
-    }
+    {}
 
     // ---------------------------------------------------------------------------
     // LoadFile — read entire JPEG into memory
     // ---------------------------------------------------------------------------
     // MISRA Deviation 2: std::ifstream for file reading.
+    // MISRA DEV-004 (V2506): Early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     bool FileTransfer::LoadFile(const std::string& filePath)
     {
@@ -39,7 +39,7 @@ namespace AeroTrack {
         m_fileData.clear();
         m_status = FileTransferStatus::NOT_STARTED;
 
-        // Open file in binary mode
+        // Open file in binary mode, seeked to end to determine size
         std::ifstream file(filePath, std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
             m_status = FileTransferStatus::FAILED;
@@ -53,8 +53,18 @@ namespace AeroTrack {
             return false;
         }
 
-        // Seek back to start
-        file.seekg(0, std::ios::beg);
+        // Seek back to start.
+        // MISRA 0-1-7 (V2547): seekg() returns istream& (self-reference). The
+        // return value carries no error information; stream failure is reported
+        // via the stream's failbit, which is checked immediately via file.good().
+        // (void) suppresses the MISRA finding; file.good() provides the actual
+        // error detection — this is a correctness improvement over the original.
+        (void)file.seekg(0, std::ios::beg);
+        if (!file.good()) {
+            m_fileData.clear();
+            m_status = FileTransferStatus::FAILED;
+            return false;
+        }
 
         // Allocate and read entire file (RAII via std::vector)
         m_fileData.resize(static_cast<size_t>(fileSize));
@@ -73,6 +83,8 @@ namespace AeroTrack {
 
     // ---------------------------------------------------------------------------
     // PrepareTransfer — set flight_id and calculate chunk count
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): Early return is a guard clause only.
     // ---------------------------------------------------------------------------
     bool FileTransfer::PrepareTransfer(uint32_t flightId)
     {
@@ -133,10 +145,11 @@ namespace AeroTrack {
     // Payload layout (4 + up to 1024 bytes, chunk_index in big-endian):
     //   [0..3]         chunk_index  (uint32_t, big-endian)
     //   [4..4+N-1]     chunk_data   (N bytes, where N <= FILE_CHUNK_SIZE)
+    // MISRA DEV-004 (V2506): Early return is a guard clause (bounds check) only.
     // ---------------------------------------------------------------------------
     Packet FileTransfer::BuildChunkPacket(uint32_t chunkIndex) const
     {
-        // Bounds check
+        // Bounds check — defensive against caller passing an out-of-range index
         if (chunkIndex >= m_totalChunks) {
             Packet errPkt(PacketType::ERROR, m_flightId);
             return errPkt;
