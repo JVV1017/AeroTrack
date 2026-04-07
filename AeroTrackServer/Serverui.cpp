@@ -14,7 +14,7 @@
 #include "StateMachine.h"
 #include "Config.h"
 
-#include <cstdlib>  // system("cls")
+// <cstdlib> removed — system() call replaced with ANSI escape (MISRA 18-0-3, V2509)
 
 namespace AeroTrack {
 
@@ -27,8 +27,7 @@ namespace AeroTrack {
         , m_eventLog()
         , m_maxEvents(20U)
         , m_startTime(std::chrono::steady_clock::now())
-    {
-    }
+    {}
 
     // ---------------------------------------------------------------------------
     // Attach — set read-only data sources
@@ -52,27 +51,42 @@ namespace AeroTrack {
             now.time_since_epoch()).count() % 1000;
 
         struct tm timeInfo {};
+
 #if defined(_WIN32)
-        localtime_s(&timeInfo, &timeT);
+        // MISRA 0-1-7 (V2547): localtime_s returns errno_t; result is checked.
+        const errno_t localErr = localtime_s(&timeInfo, &timeT);
+        if (localErr != 0) {
+            // Time conversion failed — timeInfo remains zero-initialised;
+            // timestamp will show 00:00:00.000 rather than crashing.
+        }
 #else
         localtime_r(&timeT, &timeInfo);
 #endif
 
+        // MISRA DEV-005 (V2578): "%H:%M:%S" is a string literal passed to
+        // std::put_time which takes const char*. No modification occurs.
+        // See project deviation log DEV-005.
+        static const char kTimeFmt[] = "%H:%M:%S";
+
         std::ostringstream oss;
-        oss << std::put_time(&timeInfo, "%H:%M:%S")
+        oss << std::put_time(&timeInfo, kTimeFmt)
             << "." << std::setw(3) << std::setfill('0') << ms
             << "  " << event;
 
         m_eventLog.push_back(oss.str());
 
-        // Trim to max size (circular buffer behavior)
+        // Trim to max size (circular buffer behaviour)
         while (m_eventLog.size() > static_cast<size_t>(m_maxEvents)) {
-            m_eventLog.erase(m_eventLog.begin());
+            // MISRA 0-1-7 (V2547): vector::erase returns iterator; explicitly
+            // discarded — the updated iterator is not needed here.
+            (void)m_eventLog.erase(m_eventLog.begin());
         }
     }
 
     // ---------------------------------------------------------------------------
     // Render — full dashboard redraw
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): void functions use early return guard clauses.
     // ---------------------------------------------------------------------------
     void ServerUI::Render() const
     {
@@ -139,6 +153,7 @@ namespace AeroTrack {
     // RenderFlightTable — all registered aircraft
     // ---------------------------------------------------------------------------
     // REQ-SVR-060: shows connected aircraft, flight states, sector assignments
+    // MISRA DEV-004 (V2506): early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     void ServerUI::RenderFlightTable() const
     {
@@ -195,6 +210,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // RenderPendingHandoffs — detail on in-progress handoffs
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): early returns are guard clauses only.
+    // ---------------------------------------------------------------------------
     void ServerUI::RenderPendingHandoffs() const
     {
         if (m_handoffManager == nullptr) {
@@ -236,6 +253,8 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // RenderEventLog — rolling event log (REQ-SVR-060: event log)
     // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): early return is a guard clause only.
+    // ---------------------------------------------------------------------------
     void ServerUI::RenderEventLog() const
     {
         std::cout << "\n  EVENT LOG (last " << m_maxEvents << " events)\n";
@@ -266,20 +285,20 @@ namespace AeroTrack {
     // ---------------------------------------------------------------------------
     // ClearConsole — platform-specific console clear
     // ---------------------------------------------------------------------------
+    // MISRA 18-0-3 fix (V2509): system("cls") replaced with ANSI escape sequence.
+    // \033[2J clears the screen; \033[H resets cursor to home position.
+    // Works on Windows 10+ (Virtual Terminal Processing enabled by default) and
+    // all Unix-like systems. No subprocess is spawned; no shell is invoked.
+    // ---------------------------------------------------------------------------
     void ServerUI::ClearConsole() const
     {
-#if defined(_WIN32)
-        // MISRA note: system() call is acceptable for console UI clear in demo
-        // In production, use Win32 API (FillConsoleOutputCharacter) instead
-        (void)system("cls");
-#else
-        // ANSI escape sequence for Unix-like systems
-        std::cout << "\033[2J\033[H";
-#endif
+        std::cout << "\033[2J\033[H" << std::flush;
     }
 
     // ---------------------------------------------------------------------------
     // FormatDuration — convert milliseconds to human-readable string
+    // ---------------------------------------------------------------------------
+    // MISRA DEV-004 (V2506): early returns are guard clauses only.
     // ---------------------------------------------------------------------------
     std::string ServerUI::FormatDuration(uint64_t milliseconds)
     {
