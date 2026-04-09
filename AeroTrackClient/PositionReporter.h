@@ -45,6 +45,11 @@ namespace AeroTrack {
         uint16_t m_speedKts;
         uint16_t m_headingDeg;
 
+        // +1.0 = moving north, -1.0 = moving south.
+        // Bounce prevents hard wrap from 49.0 -> 43.5 which triggered
+        // an immediate reverse handoff and reset FileReceiver mid-transfer.
+        double   m_latDirection;
+
         void SimulateMovement() noexcept;
     };
 
