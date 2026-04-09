@@ -142,7 +142,8 @@ namespace AeroTrack {
             m_rudp, m_logger, m_flightId, m_serverEndpoint);
         m_handoffHandler = std::make_unique<HandoffHandler>(
             m_rudp, m_logger, m_flightId, m_serverEndpoint);
-        m_fileReceiver = std::make_unique<FileReceiver>(m_logger);
+        // REQ-CLT-040: flightId passed so output file is named received_sector_<flightId>.jpg
+        m_fileReceiver = std::make_unique<FileReceiver>(m_logger, m_flightId);
         m_ui = std::make_unique<ClientUI>(*this);
 
         return true;
@@ -319,14 +320,51 @@ namespace AeroTrack {
             if (newSector != 0U) {
                 m_sectorId = newSector;
                 m_handoffHandler->ClearPendingHandoff();
+
+                // REQ-CLT-060: Log handoff event to flight terminal comm log
+                if (m_ui != nullptr) {
+                    char msg[48];
+                    std::snprintf(msg, sizeof(msg),
+                        "Handoff complete -> sector %u", m_sectorId);
+                    m_ui->AppendEvent(msg);
+                }
             }
         }
     }
 
     // REQ-CLT-040: Forward to FileReceiver
+    // Comm log events are posted on state transitions so the flight terminal
+    // always reflects the current transfer status (REQ-CLT-050).
     void Client::HandleFileTransfer(const Packet& pkt) noexcept {
         if (m_fileReceiver != nullptr) {
+            const TransferState stateBefore = m_fileReceiver->GetState();
             m_fileReceiver->HandlePacket(pkt);
+            const TransferState stateAfter = m_fileReceiver->GetState();
+
+            if (m_ui != nullptr) {
+                // IDLE -> RECEIVING: new transfer starting
+                if ((stateBefore != TransferState::RECEIVING) &&
+                    (stateAfter == TransferState::RECEIVING)) {
+                    m_ui->AppendEvent("Receiving radar image...");
+                }
+                // -> COMPLETE: write success
+                else if ((stateBefore != TransferState::COMPLETE) &&
+                    (stateAfter == TransferState::COMPLETE)) {
+                    char msg[64];
+                    std::snprintf(msg, sizeof(msg),
+                        "Radar saved: %s",
+                        m_fileReceiver->GetOutputPath().c_str());
+                    m_ui->AppendEvent(msg);
+                }
+                // -> FAILED: write failed or incomplete
+                else if ((stateBefore != TransferState::FAILED) &&
+                    (stateAfter == TransferState::FAILED)) {
+                    m_ui->AppendEvent("Radar transfer failed");
+                }
+                else {
+                    // MISRA 6-4-2: terminal else — no event for intermediate chunk states
+                }
+            }
         }
     }
 
@@ -345,9 +383,13 @@ namespace AeroTrack {
 
     void Client::SendHeartbeat() noexcept {
         Packet pkt(PacketType::HEARTBEAT, m_flightId);
-        if (m_rudp.SendReliable(pkt, m_flightId, m_serverEndpoint)) {
-            m_logger.LogPacket("TX", pkt);
-        }
+        // Fire-and-forget: SendReliable blocks the receive loop waiting for ACK,
+        // which prevents the client from draining FILE_TRANSFER_CHUNK packets
+        // during a burst transfer. Loss of one heartbeat is acceptable -- the
+        // server contact timeout is 10s and heartbeats fire every 3s.
+        // MISRA 0-1-7: (void) cast -- return value intentionally discarded.
+        (void)m_rudp.SendPacket(pkt, m_flightId, m_serverEndpoint);
+        m_logger.LogPacket("TX", pkt);
     }
 
 } // namespace AeroTrack
