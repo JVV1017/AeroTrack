@@ -9,6 +9,8 @@
 
 #include <cstring>   // std::memcpy
 #include <chrono>
+#include <thread>   // std::this_thread::sleep_for — chunk send throttle
+
 
 namespace AeroTrack {
 
@@ -495,6 +497,12 @@ namespace AeroTrack {
             Packet chunkPkt = ft.BuildChunkPacket(i);
             // MISRA 0-1-7 (V2547): Intentional fire-and-forget.
             (void)m_rudp.SendPacket(chunkPkt, flightId, dest);
+
+            // Throttle: pause 1ms every 10 chunks to let client drain its recv buffer.
+            // 10 chunks x 1055 bytes = ~10KB per burst, well under the 64KB OS limit.
+            if ((i % 10U) == 0U) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1U));
+            }
 
             // Log every 100th chunk to avoid flooding the log
             if ((i % 100U == 0U) || (i == ft.GetTotalChunks() - 1U)) {
