@@ -32,15 +32,18 @@ namespace AeroTrack {
 
     Packet::Packet()
     {
-        std::memset(&m_header, 0, sizeof(PacketHeader));
+        // MISRA Fix [V2547]: memset returns void* to the destination — always
+        // the same pointer passed in. No meaningful result; discard is intentional.
+        (void)std::memset(&m_header, 0, sizeof(PacketHeader));
     }
 
     Packet::Packet(PacketType type, uint32_t flightId)
     {
-        std::memset(&m_header, 0, sizeof(PacketHeader));
+        // MISRA Fix [V2547]: same rationale as default constructor above.
+        (void)std::memset(&m_header, 0, sizeof(PacketHeader));
         m_header.packet_type = static_cast<uint8_t>(type);
-        m_header.flight_id   = flightId;
-        m_header.timestamp   = CurrentTimestampMs();
+        m_header.flight_id = flightId;
+        m_header.timestamp = CurrentTimestampMs();
     }
 
 
@@ -54,11 +57,11 @@ namespace AeroTrack {
     }
 
     uint32_t Packet::GetSequenceNumber() const noexcept { return m_header.sequence_number; }
-    uint32_t Packet::GetAckNumber()      const noexcept { return m_header.ack_number;      }
-    uint64_t Packet::GetTimestamp()      const noexcept { return m_header.timestamp;       }
-    uint32_t Packet::GetFlightId()       const noexcept { return m_header.flight_id;       }
-    uint32_t Packet::GetPayloadLength()  const noexcept { return m_header.payload_length;  }
-    uint16_t Packet::GetChecksum()       const noexcept { return m_header.checksum;        }
+    uint32_t Packet::GetAckNumber()      const noexcept { return m_header.ack_number; }
+    uint64_t Packet::GetTimestamp()      const noexcept { return m_header.timestamp; }
+    uint32_t Packet::GetFlightId()       const noexcept { return m_header.flight_id; }
+    uint32_t Packet::GetPayloadLength()  const noexcept { return m_header.payload_length; }
+    uint16_t Packet::GetChecksum()       const noexcept { return m_header.checksum; }
 
     const std::vector<uint8_t>& Packet::GetPayload() const noexcept { return m_payload; }
 
@@ -73,21 +76,27 @@ namespace AeroTrack {
     }
 
     void Packet::SetSequenceNumber(uint32_t seq) noexcept { m_header.sequence_number = seq; }
-    void Packet::SetAckNumber(uint32_t ack)      noexcept { m_header.ack_number       = ack; }
-    void Packet::SetTimestamp(uint64_t ts)        noexcept { m_header.timestamp        = ts;  }
-    void Packet::SetFlightId(uint32_t id)         noexcept { m_header.flight_id        = id;  }
+    void Packet::SetAckNumber(uint32_t ack)      noexcept { m_header.ack_number = ack; }
+    void Packet::SetTimestamp(uint64_t ts)        noexcept { m_header.timestamp = ts; }
+    void Packet::SetFlightId(uint32_t id)         noexcept { m_header.flight_id = id; }
 
     void Packet::SetPayload(const std::vector<uint8_t>& payload)
     {
-        m_payload                = payload;
-        m_header.payload_length  = static_cast<uint32_t>(m_payload.size());
+        m_payload = payload;
+        m_header.payload_length = static_cast<uint32_t>(m_payload.size());
     }
 
     void Packet::SetPayload(const uint8_t* data, uint32_t length)
     {
         if ((data != nullptr) && (length > 0U))
         {
-            m_payload.assign(data, data + length);
+            // MISRA Fix [V2563]: replaced data + length (pointer arithmetic)
+            // with an index-based loop (subscript notation only, MISRA 5-0-15).
+            m_payload.resize(static_cast<size_t>(length));
+            for (uint32_t i = 0U; i < length; ++i)
+            {
+                m_payload[i] = data[i];
+            }
             m_header.payload_length = length;
         }
     }
@@ -102,6 +111,12 @@ namespace AeroTrack {
     //
     // REQ-PKT-050
     // =========================================================================
+    // MISRA Note [V2563]: data[i] inside this function uses subscript notation
+    // (the MISRA-permitted form of pointer arithmetic, Rule 5-0-15). PVS-Studio
+    // flags it because the parameter is typed as const uint8_t* rather than an
+    // array. The public API signature cannot be changed to std::vector without
+    // breaking all raw-buffer callers (e.g., Deserialize receive buffer).
+    // All internal usage passes buffer.data() — a contiguous array allocation.
     uint16_t Packet::ComputeCRC16(const uint8_t* data, uint32_t length) noexcept
     {
         uint16_t crc = 0x0000U;
@@ -139,30 +154,35 @@ namespace AeroTrack {
     // =========================================================================
     std::vector<uint8_t> Packet::Serialize() const
     {
-        const uint32_t headerSize  = static_cast<uint32_t>(sizeof(PacketHeader));
+        const uint32_t headerSize = static_cast<uint32_t>(sizeof(PacketHeader));
         const uint32_t payloadSize = static_cast<uint32_t>(m_payload.size());
-        const uint32_t totalSize   = headerSize + payloadSize;
+        const uint32_t totalSize = headerSize + payloadSize;
 
         std::vector<uint8_t> buffer(totalSize, 0U);
 
         // Copy header into buffer, with checksum zeroed for CRC input
-        PacketHeader tempHeader     = m_header;
-        tempHeader.payload_length   = payloadSize;   // ensure header is consistent
-        tempHeader.checksum         = 0U;
+        PacketHeader tempHeader = m_header;
+        tempHeader.payload_length = payloadSize;   // ensure header is consistent
+        tempHeader.checksum = 0U;
 
-        std::memcpy(buffer.data(), &tempHeader, headerSize);
+        // MISRA Fix [V2547]: memcpy return values explicitly discarded throughout
+        // Serialize() and ValidateChecksum(). Return value is the destination
+        // pointer — always the same as the first argument. Discard is intentional.
+        // MISRA Fix [V2563]: buffer.data() + offset replaced with &buffer[offset]
+        // (subscript notation) per MISRA Rule 5-0-15.
+        (void)std::memcpy(buffer.data(), &tempHeader, headerSize);
 
         // Append payload bytes
         if (payloadSize > 0U)
         {
-            std::memcpy(buffer.data() + headerSize, m_payload.data(), payloadSize);
+            (void)std::memcpy(&buffer[headerSize], m_payload.data(), payloadSize);
         }
 
         // Compute CRC-16 over the full buffer (checksum = 0 at this point)
         const uint16_t crc = ComputeCRC16(buffer.data(), totalSize);
 
         // Write CRC back using memcpy to avoid any alignment assumption
-        std::memcpy(buffer.data() + CHECKSUM_OFFSET, &crc, sizeof(uint16_t));
+        (void)std::memcpy(&buffer[CHECKSUM_OFFSET], &crc, sizeof(uint16_t));
 
         return buffer;
     }
@@ -189,7 +209,8 @@ namespace AeroTrack {
         }
 
         Packet packet;
-        std::memcpy(&packet.m_header, buffer, headerSize);
+        // MISRA Fix [V2547]: memcpy return value explicitly discarded.
+        (void)std::memcpy(&packet.m_header, buffer, headerSize);
 
         // Guard against truncated or malformed payload length
         const uint32_t expectedTotal = headerSize + packet.m_header.payload_length;
@@ -202,9 +223,11 @@ namespace AeroTrack {
         if (packet.m_header.payload_length > 0U)
         {
             packet.m_payload.resize(packet.m_header.payload_length);
-            std::memcpy(packet.m_payload.data(),
-                        buffer + headerSize,
-                        packet.m_header.payload_length);
+            // MISRA Fix [V2547+V2563]: void cast + &buffer[headerSize]
+            // replaces buffer + headerSize (pointer arithmetic).
+            (void)std::memcpy(packet.m_payload.data(),
+                &buffer[headerSize],
+                packet.m_header.payload_length);
         }
 
         return packet;
@@ -219,20 +242,22 @@ namespace AeroTrack {
     // =========================================================================
     bool Packet::ValidateChecksum() const
     {
-        const uint16_t stored      = m_header.checksum;
-        const uint32_t headerSize  = static_cast<uint32_t>(sizeof(PacketHeader));
+        const uint16_t stored = m_header.checksum;
+        const uint32_t headerSize = static_cast<uint32_t>(sizeof(PacketHeader));
         const uint32_t payloadSize = static_cast<uint32_t>(m_payload.size());
-        const uint32_t totalSize   = headerSize + payloadSize;
+        const uint32_t totalSize = headerSize + payloadSize;
 
         std::vector<uint8_t> buffer(totalSize, 0U);
 
         PacketHeader tempHeader = m_header;
-        tempHeader.checksum     = 0U;
-        std::memcpy(buffer.data(), &tempHeader, headerSize);
+        tempHeader.checksum = 0U;
+        // MISRA Fix [V2547+V2563]: void casts + &buffer[offset] subscript
+        // notation — same rationale as Serialize() above.
+        (void)std::memcpy(buffer.data(), &tempHeader, headerSize);
 
         if (payloadSize > 0U)
         {
-            std::memcpy(buffer.data() + headerSize, m_payload.data(), payloadSize);
+            (void)std::memcpy(&buffer[headerSize], m_payload.data(), payloadSize);
         }
 
         const uint16_t computed = ComputeCRC16(buffer.data(), totalSize);
@@ -249,8 +274,8 @@ namespace AeroTrack {
     uint64_t Packet::CurrentTimestampMs() noexcept
     {
         const auto now = std::chrono::system_clock::now();
-        const auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(
-                             now.time_since_epoch());
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now.time_since_epoch());
         return static_cast<uint64_t>(ms.count());
     }
 

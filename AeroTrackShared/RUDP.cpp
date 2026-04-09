@@ -51,7 +51,10 @@ namespace AeroTrack
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(ep.port);
-        inet_pton(AF_INET, ep.ip.c_str(), &addr.sin_addr);
+        // MISRA Fix [V2547]: inet_pton returns 1 on success, 0 on invalid format,
+        // -1 on error. IP string comes from our own Endpoint — always valid.
+        // Discard is intentional. Covered by MISRA Deviation 3 (Winsock API).
+        (void)inet_pton(AF_INET, ep.ip.c_str(), &addr.sin_addr);
         return addr;
     }
 
@@ -61,7 +64,10 @@ namespace AeroTrack
         ep.port = ntohs(addr.sin_port);
 
         char ipBuf[INET_ADDRSTRLEN]{};
-        inet_ntop(AF_INET, &addr.sin_addr, ipBuf, INET_ADDRSTRLEN);
+        // MISRA Fix [V2547]: inet_ntop returns ipBuf on success, nullptr on error.
+        // Buffer is INET_ADDRSTRLEN — always large enough for an IPv4 address.
+        // Discard is intentional. Covered by MISRA Deviation 3 (Winsock API).
+        (void)inet_ntop(AF_INET, &addr.sin_addr, ipBuf, INET_ADDRSTRLEN);
         ep.ip = std::string(ipBuf);
 
         return ep;
@@ -121,7 +127,10 @@ namespace AeroTrack
         const SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if (sock == INVALID_SOCKET)
         {
-            WSACleanup();
+            // MISRA Fix [V2547]: WSACleanup return value explicitly discarded.
+            // Called during a failure path where Init() is already returning false;
+            // no further error handling is possible. Discard is intentional.
+            (void)WSACleanup();
             return false;
         }
 
@@ -150,8 +159,11 @@ namespace AeroTrack
     {
         if (m_initialized)
         {
-            closesocket(static_cast<SOCKET>(m_socketHandle));
-            WSACleanup();
+            // MISRA Fix [V2547]: closesocket and WSACleanup return values
+            // explicitly discarded. Called during shutdown — no recovery is
+            // possible if either fails. Discard is intentional.
+            (void)closesocket(static_cast<SOCKET>(m_socketHandle));
+            (void)WSACleanup();
             m_socketHandle = static_cast<uintptr_t>(INVALID_SOCKET);
             m_initialized = false;
         }
@@ -274,8 +286,12 @@ namespace AeroTrack
     // =========================================================================
     // SendReliable — REQ-COM-020, REQ-COM-030, REQ-COM-040, REQ-COM-050/060
     // =========================================================================
-    bool RUDP::SendReliable(Packet& packet, uint32_t /*flightId*/, const Endpoint& dest)
+    bool RUDP::SendReliable(Packet& packet, uint32_t flightId, const Endpoint& dest)
     {
+        // MISRA Fix [V2537]: flightId is not used in SendReliable — the packet's
+        // flight ID is already set at construction time. The parameter is kept
+        // for API symmetry with SendPacket(). Explicit discard is intentional.
+        (void)flightId;
         if (!m_initialized || !dest.IsValid())
         {
             return false;
