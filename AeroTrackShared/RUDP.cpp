@@ -46,7 +46,7 @@ namespace AeroTrack
     // Not exposed in the header; internal linkage only.
     // =========================================================================
 
-    static sockaddr_in EndpointToSockAddr(const Endpoint &ep)
+    static sockaddr_in EndpointToSockAddr(const Endpoint& ep)
     {
         sockaddr_in addr{};
         addr.sin_family = AF_INET;
@@ -55,7 +55,7 @@ namespace AeroTrack
         return addr;
     }
 
-    static Endpoint SockAddrToEndpoint(const sockaddr_in &addr)
+    static Endpoint SockAddrToEndpoint(const sockaddr_in& addr)
     {
         Endpoint ep;
         ep.port = ntohs(addr.sin_port);
@@ -75,7 +75,7 @@ namespace AeroTrack
             sock,
             SOL_SOCKET,
             SO_RCVTIMEO,
-            reinterpret_cast<const char *>(&tv),
+            reinterpret_cast<const char*>(&tv),
             static_cast<int>(sizeof(DWORD)));
         return (result != SOCKET_ERROR);
     }
@@ -86,8 +86,8 @@ namespace AeroTrack
 
     RUDP::RUDP()
         : m_socketHandle(static_cast<uintptr_t>(INVALID_SOCKET)), m_sequenceNumber(1U) // Sequence numbers start at 1 (0 = uninitialized)
-          ,
-          m_initialized(false), m_logger(nullptr)
+        ,
+        m_initialized(false), m_logger(nullptr)
     {
     }
 
@@ -96,7 +96,7 @@ namespace AeroTrack
         Shutdown();
     }
 
-    void RUDP::SetLogger(Logger *logger) noexcept
+    void RUDP::SetLogger(Logger* logger) noexcept
     {
         m_logger = logger;
     }
@@ -124,6 +124,18 @@ namespace AeroTrack
             WSACleanup();
             return false;
         }
+
+        // REQ-SYS-070: Increase OS UDP receive buffer from the 64 KB default to 2 MB.
+        // The server blasts all 1024 file-transfer chunks in one fast burst (~1.08 MB).
+        // Windows silently drops packets once the 64 KB buffer is full — about 960 of
+        // the 1024 chunks never reach Receive(). 2 MB holds the entire burst.
+        // MISRA Deviation 3: setsockopt is a Winsock call — confined to RUDP.cpp.
+        const int rcvBufSize = 2097152;  // 2 MB
+        (void)setsockopt(sock,
+            SOL_SOCKET,
+            SO_RCVBUF,
+            reinterpret_cast<const char*>(&rcvBufSize),
+            static_cast<int>(sizeof(rcvBufSize)));
 
         m_socketHandle = static_cast<uintptr_t>(sock);
         m_initialized = true;
@@ -162,7 +174,7 @@ namespace AeroTrack
 
         const int result = bind(
             static_cast<SOCKET>(m_socketHandle),
-            reinterpret_cast<sockaddr *>(&bindAddr),
+            reinterpret_cast<sockaddr*>(&bindAddr),
             static_cast<int>(sizeof(sockaddr_in)));
 
         return (result != SOCKET_ERROR);
@@ -179,7 +191,7 @@ namespace AeroTrack
     // =========================================================================
     // SendRawBytes — internal serialized send
     // =========================================================================
-    bool RUDP::SendRawBytes(const std::vector<uint8_t> &data, const Endpoint &dest)
+    bool RUDP::SendRawBytes(const std::vector<uint8_t>& data, const Endpoint& dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -190,10 +202,10 @@ namespace AeroTrack
 
         const int sent = sendto(
             static_cast<SOCKET>(m_socketHandle),
-            reinterpret_cast<const char *>(data.data()),
+            reinterpret_cast<const char*>(data.data()),
             static_cast<int>(data.size()),
             0,
-            reinterpret_cast<sockaddr *>(&destAddr),
+            reinterpret_cast<sockaddr*>(&destAddr),
             static_cast<int>(sizeof(sockaddr_in)));
 
         return (sent != SOCKET_ERROR);
@@ -262,7 +274,7 @@ namespace AeroTrack
     // =========================================================================
     // SendReliable — REQ-COM-020, REQ-COM-030, REQ-COM-040, REQ-COM-050/060
     // =========================================================================
-    bool RUDP::SendReliable(Packet &packet, uint32_t /*flightId*/, const Endpoint &dest)
+    bool RUDP::SendReliable(Packet& packet, uint32_t /*flightId*/, const Endpoint& dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -317,7 +329,7 @@ namespace AeroTrack
     // The client handles retry at the application level (re-sending CONNECT on
     // timeout, handoff has its own timer).
     // =========================================================================
-    bool RUDP::SendPacket(Packet &packet, uint32_t flightId, const Endpoint &dest)
+    bool RUDP::SendPacket(Packet& packet, uint32_t flightId, const Endpoint& dest)
     {
         if (!m_initialized || !dest.IsValid())
         {
@@ -334,7 +346,7 @@ namespace AeroTrack
     // =========================================================================
     // SendAckFor — REQ-COM-030
     // =========================================================================
-    bool RUDP::SendAckFor(uint32_t seqNumber, uint32_t flightId, const Endpoint &dest)
+    bool RUDP::SendAckFor(uint32_t seqNumber, uint32_t flightId, const Endpoint& dest)
     {
         Packet ack(PacketType::ACK, flightId);
         ack.SetSequenceNumber(GetNextSequenceNumber());
@@ -348,7 +360,7 @@ namespace AeroTrack
     // =========================================================================
     // Receive — REQ-COM-030, REQ-PKT-050, REQ-PKT-060, REQ-LOG-010
     // =========================================================================
-    bool RUDP::Receive(Packet &outPacket, Endpoint &outSender, uint32_t timeoutMs)
+    bool RUDP::Receive(Packet& outPacket, Endpoint& outSender, uint32_t timeoutMs)
     {
         if (!m_initialized)
         {
@@ -366,10 +378,10 @@ namespace AeroTrack
 
         const int received = recvfrom(
             sock,
-            reinterpret_cast<char *>(recvBuf),
+            reinterpret_cast<char*>(recvBuf),
             static_cast<int>(sizeof(recvBuf)),
             0,
-            reinterpret_cast<sockaddr *>(&senderAddr),
+            reinterpret_cast<sockaddr*>(&senderAddr),
             &addrLen);
 
         if (received == SOCKET_ERROR)
