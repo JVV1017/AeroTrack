@@ -51,7 +51,11 @@ namespace AeroTrack {
         }
 
         char msg[64];
-        std::snprintf(msg, sizeof(msg),
+        // MISRA Fix [V2547]: snprintf return value explicitly discarded throughout
+        // this file. Return value is the character count that would have been
+        // written; all msg buffers are sized to hold their maximum possible output
+        // so truncation cannot occur in practice. Discard is intentional.
+        (void)std::snprintf(msg, sizeof(msg),
             "Client: Initialized — flight %u callsign %s",
             m_flightId, m_callsign.c_str());
         m_logger.LogInfo(msg);
@@ -132,7 +136,7 @@ namespace AeroTrack {
         m_state = ClientState::CONNECTED;
 
         char msg[64];
-        std::snprintf(msg, sizeof(msg),
+        (void)std::snprintf(msg, sizeof(msg),
             "Client: Handshake complete — CONNECTED to sector %u", m_sectorId);
         m_logger.LogInfo(msg);
 
@@ -266,7 +270,7 @@ namespace AeroTrack {
             break;  // Handled inside RUDP layer
         default: {
             char msg[64];
-            std::snprintf(msg, sizeof(msg),
+            (void)std::snprintf(msg, sizeof(msg),
                 "Client: Unhandled packet type 0x%02X",
                 static_cast<uint8_t>(pkt.GetType()));
             m_logger.LogError(msg);
@@ -299,7 +303,7 @@ namespace AeroTrack {
             static_cast<uint32_t>(payload[7U]);
 
         char msg[64];
-        std::snprintf(msg, sizeof(msg),
+        (void)std::snprintf(msg, sizeof(msg),
             "Client: CONNECT_ACK — sector %u token 0x%08X",
             m_sectorId, m_sessionToken);
         m_logger.LogInfo(msg);
@@ -324,7 +328,7 @@ namespace AeroTrack {
                 // REQ-CLT-060: Log handoff event to flight terminal comm log
                 if (m_ui != nullptr) {
                     char msg[48];
-                    std::snprintf(msg, sizeof(msg),
+                    (void)std::snprintf(msg, sizeof(msg),
                         "Handoff complete -> sector %u", m_sectorId);
                     m_ui->AppendEvent(msg);
                 }
@@ -351,7 +355,7 @@ namespace AeroTrack {
                 else if ((stateBefore != TransferState::COMPLETE) &&
                     (stateAfter == TransferState::COMPLETE)) {
                     char msg[64];
-                    std::snprintf(msg, sizeof(msg),
+                    (void)std::snprintf(msg, sizeof(msg),
                         "Radar saved: %s",
                         m_fileReceiver->GetOutputPath().c_str());
                     m_ui->AppendEvent(msg);

@@ -25,14 +25,18 @@
 // ---------------------------------------------------------------------------
 // Graceful shutdown on Ctrl+C
 // ---------------------------------------------------------------------------
+// MISRA Fix [V2575]: SignalHandler moved into the anonymous namespace.
+// Anonymous namespace gives internal linkage (same effect as 'static') and
+// satisfies MISRA Rule 7-3-1: the global namespace shall only contain main,
+// namespace declarations, and extern "C" declarations.
 namespace {
     AeroTrack::Client* g_client = nullptr;
-}
 
-static void SignalHandler(int sig) noexcept {
-    (void)sig;
-    if (g_client != nullptr) {
-        g_client->Stop();  // REQ-CLT-070: sends DISCONNECT
+    static void SignalHandler(int sig) noexcept {
+        (void)sig;
+        if (g_client != nullptr) {
+            g_client->Stop();  // REQ-CLT-070: sends DISCONNECT
+        }
     }
 }
 
@@ -48,13 +52,19 @@ int main(int argc, char* argv[]) {
     WSADATA wsaData;
     int wsaResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (wsaResult != 0) {
-        std::fprintf(stderr,
+        // MISRA Fix [V2547]: fprintf return value explicitly discarded.
+        // Return value is the character count written; failure here is
+        // non-recoverable (stderr unavailable), so discard is intentional.
+        (void)std::fprintf(stderr,
             "AeroTrackClient: WSAStartup failed (%d)\n", wsaResult);
         return EXIT_FAILURE;
     }
 
     // Register Ctrl+C handler (REQ-CLT-070)
-    std::signal(SIGINT, SignalHandler);
+    // DEV-6: std::signal use is a documented deviation (MISRA 18-7-1).
+    // MISRA Fix [V2547]: signal() returns the previous handler; discarding
+    // it is intentional — we have no prior handler to restore.
+    (void)std::signal(SIGINT, SignalHandler);
 
     {
         AeroTrack::Client client;
@@ -64,33 +74,47 @@ int main(int argc, char* argv[]) {
         uint32_t    flightId = 1001U;
         std::string callsign = "AC123";
 
+        // MISRA Fix [V2508]: std::atoi replaced with std::strtoul.
+        // atoi is banned (MISRA Rule 18-0-5): undefined behaviour on overflow
+        // and returns 0 for invalid input with no error indication.
+        // std::strtoul is in <cstdlib>, handles unsigned conversion, and is
+        // not on the MISRA banned-function list.
+        // MISRA Fix [V2516]: terminal else added to prove the zero-arg case
+        // (use defaults) is intentional, satisfying MISRA Rule 6-4-2.
         if (argc >= 3) {
-            flightId = static_cast<uint32_t>(std::atoi(argv[1]));
+            flightId = static_cast<uint32_t>(std::strtoul(argv[1], nullptr, 10));
             callsign = std::string(argv[2]);
         }
         else if (argc >= 2) {
-            flightId = static_cast<uint32_t>(std::atoi(argv[1]));
+            flightId = static_cast<uint32_t>(std::strtoul(argv[1], nullptr, 10));
+        }
+        else {
+            /* No arguments supplied — default values (1001 / AC123) remain. */
         }
 
-        std::fprintf(stdout,
+        // MISRA Fix [V2547]: fprintf return value explicitly discarded.
+        (void)std::fprintf(stdout,
             "AeroTrackClient: Flight %u (%s) connecting to 127.0.0.1:27015...\n",
             flightId, callsign.c_str());
 
         if (!client.Init(flightId, callsign)) {
-            std::fprintf(stderr, "AeroTrackClient: Init failed\n");
-            WSACleanup();
+            // MISRA Fix [V2547]: fprintf and WSACleanup return values
+            // explicitly discarded throughout — failures here are inside an
+            // already-failing shutdown path; no further action is possible.
+            (void)std::fprintf(stderr, "AeroTrackClient: Init failed\n");
+            (void)WSACleanup();
             return EXIT_FAILURE;
         }
 
         // REQ-CLT-010: 3-step handshake
         if (!client.Connect()) {
-            std::fprintf(stderr,
+            (void)std::fprintf(stderr,
                 "AeroTrackClient: Handshake failed — is the server running?\n");
-            WSACleanup();
+            (void)WSACleanup();
             return EXIT_FAILURE;
         }
 
-        std::fprintf(stdout,
+        (void)std::fprintf(stdout,
             "AeroTrackClient: Connected. Starting flight terminal.\n");
 
         // REQ-CLT-020 to 050: Main loop
@@ -99,7 +123,7 @@ int main(int argc, char* argv[]) {
         g_client = nullptr;
     }
 
-    WSACleanup();
-    std::fprintf(stdout, "AeroTrackClient: Shutdown complete.\n");
+    (void)WSACleanup();
+    (void)std::fprintf(stdout, "AeroTrackClient: Shutdown complete.\n");
     return EXIT_SUCCESS;
 }

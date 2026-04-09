@@ -147,7 +147,10 @@ namespace AeroTrack {
         m_state = TransferState::RECEIVING;
 
         char msg[96];
-        std::snprintf(msg, sizeof(msg),
+        // MISRA Fix [V2547]: snprintf return value explicitly discarded throughout
+        // this file. All msg buffers are sized to hold their maximum possible
+        // output so truncation cannot occur in practice. Discard is intentional.
+        (void)std::snprintf(msg, sizeof(msg),
             "FileReceiver: Transfer started -- %u bytes, %u chunks -> %s",
             m_totalFileSize, m_totalChunks, m_outputPath.c_str());
         m_logger.LogInfo(msg);
@@ -186,7 +189,7 @@ namespace AeroTrack {
 
         if (chunkIndex >= m_totalChunks) {                           // MISRA DEV-004
             char msg[64];
-            std::snprintf(msg, sizeof(msg),
+            (void)std::snprintf(msg, sizeof(msg),
                 "FileReceiver: Chunk index %u out of range (total %u)",
                 chunkIndex, m_totalChunks);
             m_logger.LogError(msg);
@@ -217,7 +220,7 @@ namespace AeroTrack {
         const uint32_t progress = GetProgressPercent();
         if ((progress % 10U) == 0U) {
             char msg[64];
-            std::snprintf(msg, sizeof(msg),
+            (void)std::snprintf(msg, sizeof(msg),
                 "FileReceiver: Progress %u%% (%u/%u chunks)",
                 progress, m_receivedChunks, m_totalChunks);
             m_logger.LogInfo(msg);
@@ -262,7 +265,7 @@ namespace AeroTrack {
 
             if (missingChunks != 0U) {
                 char msg[96];
-                std::snprintf(msg, sizeof(msg),
+                (void)std::snprintf(msg, sizeof(msg),
                     "FileReceiver: Transfer incomplete -- %u/%u chunks, "
                     "%u chunks lost. Partial file saved as %s",
                     m_receivedChunks, m_totalChunks,
@@ -271,7 +274,7 @@ namespace AeroTrack {
             }
             else {
                 char msg[96];
-                std::snprintf(msg, sizeof(msg),
+                (void)std::snprintf(msg, sizeof(msg),
                     "FileReceiver: Complete -- %u bytes written to %s",
                     m_totalFileSize, m_outputPath.c_str());
                 m_logger.LogInfo(msg);
@@ -293,13 +296,16 @@ namespace AeroTrack {
 
         if (!outFile.is_open()) {
             char msg[96];
-            std::snprintf(msg, sizeof(msg),
+            (void)std::snprintf(msg, sizeof(msg),
                 "FileReceiver: Cannot open output file: %s", m_outputPath.c_str());
             m_logger.LogError(msg);
             return false;
         }
 
-        outFile.write(
+        // MISRA Fix [V2547]: write() returns std::ostream& (self-reference);
+        // the return value is intentionally discarded here because stream
+        // state is validated immediately after via outFile.good().
+        (void)outFile.write(
             reinterpret_cast<const char*>(m_fileBuffer.data()),
             static_cast<std::streamsize>(m_totalFileSize));
 

@@ -40,7 +40,10 @@ namespace AeroTrack {
 
         // MISRA Deviation 1: vector RAII per REQ-SYS-030
         std::vector<uint8_t> payload(sizeof(PositionPayload));
-        std::memcpy(payload.data(), &pos, sizeof(PositionPayload));
+        // MISRA Fix [V2547]: memcpy returns void* to the destination — always
+        // the same pointer passed in as the first argument. There is no
+        // meaningful result to check; discard is intentional.
+        (void)std::memcpy(payload.data(), &pos, sizeof(PositionPayload));
 
         Packet pkt(PacketType::POSITION_REPORT, m_flightId);
         pkt.SetPayload(payload);

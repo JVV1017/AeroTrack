@@ -37,7 +37,10 @@ namespace AeroTrack {
             static_cast<uint32_t>(payload[3U]);
 
         char msg[64];
-        std::snprintf(msg, sizeof(msg),
+        // MISRA Fix [V2547]: snprintf return value explicitly discarded.
+        // Buffer is sized to hold the maximum formatted output; truncation
+        // cannot occur in practice. Discard is intentional.
+        (void)std::snprintf(msg, sizeof(msg),
             "HandoffHandler: HANDOFF_INSTRUCT — new sector %u", m_pendingSectorId);
         m_logger.LogInfo(msg);
 
