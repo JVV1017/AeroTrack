@@ -416,3 +416,8 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+
+# Force-include test data images even though x64/Debug is ignored
+!x64/Debug/test_data/
+!x64/Debug/test_data/**
