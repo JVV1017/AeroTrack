@@ -43,10 +43,12 @@
     <ClCompile Include="..\AeroTrackClient\ClientUI.cpp" />
     <ClCompile Include="ClientTests.cpp" />
     <ClCompile Include="Filetransfertests.cpp" />
+    <ClCompile Include="IntegrationTests.cpp" />
     <ClCompile Include="LoggerTests.cpp" />
     <ClCompile Include="RUDPTests.cpp" />
     <ClCompile Include="Servertests.cpp" />
     <ClCompile Include="Statemachinetests.cpp" />
+    <ClCompile Include="SystemTests.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Testcommon.h" />
